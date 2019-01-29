@@ -8,6 +8,9 @@
 extern "C" {
 #endif
 
+// The number of 64-bit values that can comprise the compute unit bitmask.
+#define COMPUTE_UNIT_MASK_ENTRIES (4)
+
 // This struct is used to pass arguments to the plugin's initialize function.
 // Each plugin is not required to use every field, but all fields will always
 // be set by the caller regardless.
@@ -31,7 +34,7 @@ typedef struct {
   // units 0 through 63, compute_unit_mask[1] to units 64-127, etc. (At the
   // moment, no devices should include 64 * 4 compute units anyway.) By default
   // this will be set entirely to 1s.
-  uint64_t compute_unit_mask[4];
+  uint64_t compute_unit_mask[COMPUTE_UNIT_MASK_ENTRIES];
 } InitializationParameters;
 
 // This holds times and metadata about a single GPU kernel's execution in a
