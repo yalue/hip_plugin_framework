@@ -19,6 +19,7 @@
 #include "barrier_wait.h"
 #include "parse_config.h"
 #include "plugin_interface.h"
+#include "plugin_utilities.h"
 
 // Config files are read in chunks containing this many bytes (useful for
 // reading from stdin).
@@ -63,16 +64,6 @@ typedef struct PluginState_ {
 // The function pointer type for the registration function exported by plugin
 // shared libraries.
 typedef int (*RegisterFunctionsFunction)(PluginFunctions *functions);
-
-// Returns a floating-point number of seconds from the system clock.
-static double CurrentSeconds(void) {
-  struct timespec ts;
-  if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) != 0) {
-    printf("Error getting time.\n");
-    exit(1);
-  }
-  return ((double) ts.tv_sec) + (((double) ts.tv_nsec) / 1e9);
-}
 
 // Wraps realloc, and attempts to resize the given buffer to new_size. Returns
 // 0 on error and leaves the buffer unchanged. Returns 0 on error. If buffer is
