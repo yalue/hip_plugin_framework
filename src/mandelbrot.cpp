@@ -4,7 +4,6 @@
 // size of the image to create is determined by the square root of the
 // data_size option (which roughly specifies the size in bytes of a square
 // image).
-#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>

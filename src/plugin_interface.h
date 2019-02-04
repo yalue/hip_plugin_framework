@@ -108,9 +108,7 @@ typedef void (*CleanupFunction)(void *data);
 typedef const char* (*GetNameFunction)(void);
 
 // The plugin must fill in the members of this struct in the RegisterFunctions
-// function. The initialize, get_name, and copy_out functions must be non-NULL.
-// All other functions may be optionally set to NULL, in which case they will
-// be ignored during execution.
+// function. None of these functions may be set to NULL.
 typedef struct {
   InitializeFunction initialize;
   CopyInFunction copy_in;

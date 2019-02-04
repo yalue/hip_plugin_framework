@@ -74,7 +74,6 @@ static int VerifyPluginConfigKeys(cJSON *plugin_config) {
     "label",
     "thread_count",
     "block_count",
-    "data_size",
     "additional_info",
     "max_iterations",
     "max_time",
@@ -206,14 +205,6 @@ static int ParsePluginList(GlobalConfiguration *config, cJSON *list_start) {
       goto ErrorCleanup;
     }
     plugins[i].block_count = entry->valueint;
-    entry = cJSON_GetObjectItem(current_plugin, "data_size");
-    if (!entry || (entry->type != cJSON_Number)) {
-      printf("Missing/invalid plugin data_size in config.\n");
-      goto ErrorCleanup;
-    }
-    // As with max iterations (both plugin-specific and default), use
-    // valuedouble for a better range. valueint is just a cast double already.
-    plugins[i].data_size = entry->valuedouble;
     entry = cJSON_GetObjectItem(current_plugin, "additional_info");
     if (entry) {
       plugins[i].additional_info = cJSON_PrintUnformatted(entry);

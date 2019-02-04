@@ -23,8 +23,6 @@ typedef struct {
   int thread_count;
   // The number of blocks to request the plugin to use
   int block_count;
-  // The size, in bytes, of the input data the plugin should generate or use
-  uint64_t data_size;
   // A string containing an additional user-defined argument to pass to the
   // plugin during initialization. May be either NULL or empty if unspecified.
   char *additional_info;

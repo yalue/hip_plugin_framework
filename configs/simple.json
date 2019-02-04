@@ -1,0 +1,14 @@
+{
+  "name": "Single-job test",
+  "max_iterations": 1,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "plugins": [
+    {
+      "filename": "./bin/mandelbrot.so",
+      "log_name": "results/mandelbrot_test.json",
+      "thread_count": 256,
+      "block_count": 256
+    }
+  ]
+}

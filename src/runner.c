@@ -1,6 +1,6 @@
 // This file defines the tool used for launching HIP plugins, contained in
 // shared library files, as either threads or processes. Supported shared
-// libraries must implement the RegisterFunctions(...) function as defined in
+// libraries must implement the RegisterPlugin(...) function as defined in
 // plugin_interface.h.
 //
 // Usage: ./runner <path to a JSON config file>
@@ -11,9 +11,13 @@
 #include <libgen.h>
 #include <errno.h>
 #include <sched.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 #include "barrier_wait.h"
@@ -24,6 +28,11 @@
 // Config files are read in chunks containing this many bytes (useful for
 // reading from stdin).
 #define FILE_CHUNK_SIZE (4096)
+
+// The number of bytes used when sanitizing JSON strings for writing to the
+// log. Really, the only thing that needs sanitization in here will be kernel
+// names and plugin names, so this shouldn't need to be very large.
+#define SANITIZE_JSON_BUFFER_SIZE (512)
 
 // Forward declaration for the circular reference between SharedState and
 // PluginState.
@@ -50,7 +59,6 @@ typedef struct PluginState_ {
   // it will be freed when cleaning up the global_config object in SharedState.
   PluginConfiguration *config;
   PluginFunctions functions;
-  InitializationParameters parameters;
   // The log file for this plugin.
   FILE *output_file;
   // The handle to the plugin's shared library file, returned by dlopen.
@@ -63,7 +71,18 @@ typedef struct PluginState_ {
 
 // The function pointer type for the registration function exported by plugin
 // shared libraries.
-typedef int (*RegisterFunctionsFunction)(PluginFunctions *functions);
+typedef int (*RegisterPluginFunction)(PluginFunctions *functions);
+
+// Holds data about the time required to complete various phases in a single
+// iteration of a plugin.
+typedef struct {
+  double copy_in_start;
+  double copy_in_end;
+  double execute_start;
+  double execute_end;
+  double copy_out_start;
+  double copy_out_end;
+} CPUTimes;
 
 // Wraps realloc, and attempts to resize the given buffer to new_size. Returns
 // 0 on error and leaves the buffer unchanged. Returns 0 on error. If buffer is
@@ -80,6 +99,12 @@ static int SetBufferSize(void **buffer, size_t new_size) {
   if (!new_pointer) return 0;
   *buffer = new_pointer;
   return 1;
+}
+
+// Returns the TID of the calling thread.
+static pid_t GetThreadID(void) {
+  pid_t to_return = syscall(SYS_gettid);
+  return to_return;
 }
 
 // Frees the PluginState objects in the list, along with the list itself.
@@ -180,11 +205,31 @@ static int CycleToNextCPU(int count, int current_cpu, cpu_set_t *cpu_set) {
   }
 }
 
+// Returns the time limit, in seconds, for the given plugin instance. Returns
+// -1 if the time limit isn't set. The global time limit, if set, is overridden
+// by plugin-instance-specific time limits.
+static double GetTimeLimit(PluginState *state) {
+  double tmp = state->config->max_time;
+  if (tmp > 0) return tmp;
+  tmp = state->shared_state->global_config->max_time;
+  if (tmp > 0) return tmp;
+  return -1;
+}
+
+// Returns the number of iterations to run the given plugin instance. Returns 0
+// if the limit isn't set. If set, the plugin-instance-specific iteration limit
+// overrides the global iteration limit.
+static int64_t GetMaxIterations(PluginState *state) {
+  int64_t tmp = state->config->max_iterations;
+  if (tmp >= 0) return tmp;
+  return state->shared_state->global_config->max_iterations;
+}
+
 // Allocates and initializes the plugins list in shared_state. The global
 // configuration must have already been loaded for this to succeed. Returns 0
 // on error.
 static int CreatePluginStates(SharedState *shared_state) {
-  RegisterFunctionsFunction register_functions = NULL;
+  RegisterPluginFunction register_plugin = NULL;
   PluginConfiguration *plugin_config = NULL;
   int i = 0;
   int cpu_count, current_cpu_core;
@@ -246,14 +291,14 @@ static int CreatePluginStates(SharedState *shared_state) {
       fflush(stdout);
       goto ErrorCleanup;
     }
-    register_functions = (RegisterFunctionsFunction) dlsym(
-      new_list[i].library_handle, "RegisterFunctions");
-    if (!register_functions) {
-      printf("The shared library %s doesn't export RegisterFunctions.\n",
+    register_plugin = (RegisterPluginFunction) dlsym(
+      new_list[i].library_handle, "RegisterPlugin");
+    if (!register_plugin) {
+      printf("The shared library %s doesn't export RegisterPlugin.\n",
         plugin_config->filename);
       goto ErrorCleanup;
     }
-    if (!register_functions(&(new_list[i].functions))) {
+    if (!register_plugin(&(new_list[i].functions))) {
       printf("The shared library %s's RegisterFunctions returned an error.\n",
         plugin_config->filename);
       goto ErrorCleanup;
@@ -270,10 +315,465 @@ ErrorCleanup:
   return 0;
 }
 
+// Takes a number of seconds to sleep. Returns 0 on error. Does nothing if the
+// given amount of time is 0 or negative. Returns 1 on success.
+static int SleepSeconds(double seconds) {
+  if (seconds <= 0) return 1;
+  if (usleep(seconds * 1e6) < 0) {
+    printf("Failed sleeping %f seconds: %s\n", seconds, strerror(errno));
+    return 0;
+  }
+  return 1;
+}
+
+// Sets the CPU affinity for the calling process or thread. Returns 0 on error
+// and nonzero on success. Requires a pointer to a plugin's state to determine
+// whether the caller is a process or a thread. Does nothing if the plugin
+// instance's cpu_core is set to USE_DEFAULT_CPU_CORE.
+static int SetCPUAffinity(PluginState *state) {
+  cpu_set_t cpu_set;
+  int result;
+  int cpu_core = state->cpu_core;
+  if (cpu_core == USE_DEFAULT_CPU_CORE) return 1;
+  CPU_ZERO(&cpu_set);
+  CPU_SET(cpu_core, &cpu_set);
+  // Different functions are used for setting threads' and process' CPU
+  // affinities.
+  if (state->shared_state->global_config->use_processes) {
+    result = sched_setaffinity(0, sizeof(cpu_set), &cpu_set);
+  } else {
+    result = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set), &cpu_set);
+  }
+  return result == 0;
+}
+
+// Copies the relevant fields out of the plugin's configuration into the given
+// InitializationParameters struct. Returns 0 on error.
+static int InitializeInitializationParameters(PluginState *state,
+  InitializationParameters *parameters) {
+  parameters->thread_count = state->config->thread_count;
+  parameters->block_count = state->config->block_count;
+  parameters->additional_info = state->config->additional_info;
+  parameters->device_id = state->shared_state->global_config->gpu_device_id;
+  memcpy(parameters->compute_unit_mask, state->config->compute_unit_mask,
+    COMPUTE_UNIT_MASK_ENTRIES * sizeof(uint64_t));
+  return 1;
+}
+
+// Takes a standard string and fills the output buffer with a null-terminated
+// string with JSON-unsafe values properly escaped.
+static void SanitizeJSONString(const char *input, char *output,
+  int output_size) {
+  int output_index = 0;
+  memset(output, 0, output_size);
+  while (*input) {
+    // Ensure that we have enough space for at least one full escaped value.
+    if ((output_index - 2) >= output_size) break;
+    // Block any non-ASCII characters
+    if (*input >= 0x7f) {
+      output[output_index] = '?';
+      input++;
+      output_index++;
+      continue;
+    }
+    // Copy or escape acceptable characters.
+    switch (*input) {
+    // Backspace character
+    case 0x08:
+      output[output_index] = '\\';
+      output_index++;
+      output[output_index] = 'b';
+      break;
+    // Form feed character
+    case 0x0c:
+      output[output_index] = '\\';
+      output_index++;
+      output[output_index] = 'f';
+      break;
+    case '\r':
+      output[output_index] = '\\';
+      output_index++;
+      output[output_index] = 'r';
+      break;
+    case '\t':
+      output[output_index] = '\\';
+      output_index++;
+      output[output_index] = 't';
+      break;
+    case '\\':
+      output[output_index] = '\\';
+      output_index++;
+      output[output_index] = '\\';
+      break;
+    case '"':
+      output[output_index] = '\\';
+      output_index++;
+      output[output_index] = '"';
+      break;
+    case '\n':
+      output[output_index] = '\\';
+      output_index++;
+      output[output_index] = 'n';
+      break;
+    default:
+      output[output_index] = *input;
+      break;
+    }
+    input++;
+    output_index++;
+  }
+}
+
+// Writes metadata to the output JSON file. Returns 0 on error.
+static int WriteOutputHeader(PluginState *state) {
+  FILE *output = state->output_file;
+  char buffer[SANITIZE_JSON_BUFFER_SIZE];
+  if (fprintf(output, "{\n") < 0) {
+    return 0;
+  }
+  SanitizeJSONString(state->shared_state->global_config->scenario_name,
+    buffer, sizeof(buffer));
+  if (fprintf(output, "\"scenario_name\": \"%s\",\n", buffer) < 0) {
+    return 0;
+  }
+  SanitizeJSONString(state->functions.get_name(), buffer, sizeof(buffer));
+  if (fprintf(output, "\"plugin_name\": \"%s\",\n", buffer) < 0) {
+    return 0;
+  }
+  if (fprintf(output, "\"release_time\": %f,\n",
+    state->config->release_time) < 0) {
+    return 0;
+  }
+  if (fprintf(output, "\"PID\": %d,\n", getpid()) < 0) {
+    return 0;
+  }
+  // Only include the POSIX thread ID if threads are used.
+  if (!state->shared_state->global_config->use_processes) {
+    if (fprintf(output, "\"TID\": %d,\n", (int) GetThreadID()) < 0) {
+      return 0;
+    }
+  }
+  if (fprintf(output, "\"times\": [{}") < 0) {
+    return 0;
+  }
+  fflush(output);
+  return 1;
+}
+
+// Writes the start and end CPU times for this iteration to the output file.
+static int WriteCPUTimesToOutput(FILE *output, CPUTimes *t) {
+  if (fprintf(output, ",\n{\"copy_in_times\": [%.9f,%.9f], ", t->copy_in_start,
+    t->copy_in_end) < 0) {
+    return 0;
+  }
+  if (fprintf(output, "\"execute_times\": [%.9f,%.9f], ", t->execute_start,
+    t->execute_end) < 0) {
+    return 0;
+  }
+  if (fprintf(output, "\"copy_out_times\": [%.9f,%.9f], ", t->copy_out_start,
+    t->copy_out_end) < 0) {
+    return 0;
+  }
+  // The total CPU time.
+  if (fprintf(output, "\"cpu_times\": [%.9f,%.9f]}", t->copy_in_start,
+    t->copy_out_end) < 0) {
+    return 0;
+  }
+  return 1;
+}
+
+// Formats the given timing information as a JSON object and appends it to the
+// output file. Returns 0 on error and 1 on success. Times will be written in a
+// floatig-point number of *seconds*, even though they are recorded in ns. This
+// code should not be included in plugin timing measurements.
+static int WriteTimesToOutput(FILE *output, TimingInformation *times,
+    SharedState *shared_state) {
+  // Times are printed relative to the program start time in order to make the
+  // times smaller in the logs, rather than very large numbers.
+  int i;
+  char sanitized_name[SANITIZE_JSON_BUFFER_SIZE];
+  double t;
+  KernelTimes *kernel_times = NULL;
+
+  // Iterate over each kernel invocation
+  for (i = 0; i < times->kernel_count; i++) {
+    kernel_times = times->kernel_times + i;
+    if (fprintf(output, ",\n{") < 0) {
+      return 0;
+    }
+    // The kernel name may be NULL, but print it if it's provided.
+    if (kernel_times->kernel_name) {
+      sanitized_name[sizeof(sanitized_name) - 1] = 0;
+      SanitizeJSONString(kernel_times->kernel_name, sanitized_name,
+        sizeof(sanitized_name));
+      if (fprintf(output, "\"kernel_name\": \"%s\", ", sanitized_name) < 0) {
+        return 0;
+      }
+    }
+    // Next, print this kernel's thread and block count.
+    if (fprintf(output, "\"block_count\": %d, \"thread_count\": %d, ",
+      kernel_times->block_count, kernel_times->thread_count) < 0) {
+      return 0;
+    }
+    // Print the shared memory used by the kernel.
+    if (fprintf(output, "\"shared_memory\": %d, ",
+      kernel_times->shared_memory) < 0) {
+      return 0;
+    }
+    // Print the kernel launch times for this kernel.
+    if (fprintf(output, "\"kernel_launch_times\": [") < 0) {
+      return 0;
+    }
+    // The time before the (CPU-side) kernel launch.
+    t = kernel_times->kernel_launch_times[0] - shared_state->starting_seconds;
+    if (fprintf(output, "%.9f, ", t) < 0) {
+      return 0;
+    }
+    // The time after the kernel launch returned.
+    t = kernel_times->kernel_launch_times[1] - shared_state->starting_seconds;
+    if (fprintf(output, "%.9f, ", t) < 0) {
+      return 0;
+    }
+    // The CPU time after the stream synchronize completed.
+    if (kernel_times->kernel_launch_times[2] != 0) {
+      t = kernel_times->kernel_launch_times[2] -
+        shared_state->starting_seconds;
+    } else {
+      // We set this to 0 if the sync completion time wasn't recorded for this
+      // kernel.
+      t = 0;
+    }
+    if (fprintf(output, "%.9f], ", t) < 0) {
+      return 0;
+    }
+    // We're done printing information about this kernel, print the CPU core as
+    // a sanity check.
+    if (fprintf(output, ", \"cpu_core\": %d}", sched_getcpu()) < 0) {
+      return 0;
+    }
+  }
+  fflush(output);
+  return 1;
+}
+
+// Returns the number of seconds elapsed since the global shared state was
+// initialized.
+static double GlobalSecondsElapsed(PluginState *state) {
+  return CurrentSeconds() - state->shared_state->starting_seconds;
+}
+
+// Runs a single plugin instance. This is usually called from a separate thread
+// or process. Its argument must be a pointer to a PluginState struct. It may
+// print a message and return NULL on error. On success, it will return an
+// arbitrary non-NULL value. RegisterPlugin has already been called for the
+// plugin, so the PluginFunctions struct has already been populated.
+static void* RunPlugin(void *data) {
+  InitializationParameters initialization_parameters;
+  CPUTimes cpu_times;
+  uint64_t i;
+  int64_t max_iterations;
+  double start_time, time_limit;
+  PluginState *state = (PluginState *) data;
+  PluginFunctions *plugin_functions = &(state->functions);
+  ProcessBarrier *barrier = &(state->shared_state->barrier);
+  int barrier_local_sense = 0;
+  TimingInformation timing_info;
+  void *user_data = NULL;
+  const char *name = plugin_functions->get_name();
+  if (!InitializeInitializationParameters(state, &initialization_parameters)) {
+    printf("Failed copying initialization parameters from config.\n");
+    return NULL;
+  }
+  max_iterations = GetMaxIterations(state);
+  time_limit = GetTimeLimit(state);
+  if (!SetCPUAffinity(state)) {
+    printf("Failed pinning instance of %s to a CPU core.\n", name);
+    return NULL;
+  }
+  start_time = CurrentSeconds();
+  user_data = plugin_functions->initialize(&initialization_parameters);
+  if (!user_data) {
+    printf("Failed initializing instance of %s.\n", name);
+    return NULL;
+  }
+  printf("Plugin %s initialized in %f seconds.\n", name, CurrentSeconds() -
+    start_time);
+  fflush(stdout);
+  if (!WriteOutputHeader(state)) {
+    printf("Failed writing metadata to log file.\n");
+    plugin_functions->cleanup(user_data);
+    return NULL;
+  }
+  if (!BarrierWait(barrier, &barrier_local_sense)) {
+    printf("Failed waiting for post-initialization synchronization.\n");
+    plugin_functions->cleanup(user_data);
+    return NULL;
+  }
+  // This function does nothing if the release time is 0 or lower.
+  if (!SleepSeconds(state->config->release_time)) {
+    plugin_functions->cleanup(user_data);
+    return NULL;
+  }
+  i = 0;
+  start_time = CurrentSeconds();
+  while (1) {
+    if (max_iterations > 0) {
+      i++;
+      if (i > max_iterations) break;
+    }
+    if (time_limit > 0) {
+      if ((CurrentSeconds() - start_time) >= time_limit) break;
+    }
+    // If sync_every_iteration is true, we'll wait here for previous iterations
+    // of all plugins to complete.
+    if (state->shared_state->global_config->sync_every_iteration) {
+      if (!BarrierWait(barrier, &barrier_local_sense)) {
+        printf("Failed waiting to sync before an iteration.\n");
+        plugin_functions->cleanup(user_data);
+        return NULL;
+      }
+    }
+    // A single plugin iteration consists of copy_in, execute, and copy_out.
+    cpu_times.copy_in_start = GlobalSecondsElapsed(state);
+    if (!plugin_functions->copy_in(user_data)) {
+      printf("Plugin %s copy in failed.\n", name);
+      plugin_functions->cleanup(user_data);
+      return NULL;
+    }
+    cpu_times.copy_in_end = GlobalSecondsElapsed(state);
+    cpu_times.execute_start = GlobalSecondsElapsed(state);
+    if (!plugin_functions->execute(user_data)) {
+      printf("Plugin %s execute failed.\n", name);
+      plugin_functions->cleanup(user_data);
+      return NULL;
+    }
+    cpu_times.execute_end = GlobalSecondsElapsed(state);
+    cpu_times.copy_out_start = GlobalSecondsElapsed(state);
+    if (!plugin_functions->copy_out(user_data, &timing_info)) {
+      printf("Plugin %s copy out failed.\n", name);
+      plugin_functions->cleanup(user_data);
+      return NULL;
+    }
+    cpu_times.copy_out_end = GlobalSecondsElapsed(state);
+    // Finally, write the timing data we obtained for this iteration to the
+    // output file.
+    if (!WriteCPUTimesToOutput(state->output_file, &cpu_times)) {
+      printf("Failed writing CPU times for plugin %s to output file.\n", name);
+      plugin_functions->cleanup(user_data);
+      return NULL;
+    }
+    if (!WriteTimesToOutput(state->output_file, &timing_info,
+      state->shared_state)) {
+      printf("Failed writing times for plugin %s to output file.\n", name);
+      plugin_functions->cleanup(user_data);
+      return NULL;
+    }
+  }
+  // Wait before cleaning up any successful plugins in case cleaning up blocks
+  // the GPU (in other cases, cleaning up occurred due to an error).
+  if (!BarrierWait(barrier, &barrier_local_sense)) {
+    printf("Failed waiting to sync before cleanup.\n");
+    plugin_functions->cleanup(user_data);
+    return NULL;
+  }
+  plugin_functions->cleanup(user_data);
+  if (fprintf(state->output_file, "\n]}") < 0) {
+    printf("Failed writing footer to output file.\n");
+    return NULL;
+  }
+  return (void *) 1;
+}
+
+// Runs plugin instances in separate processes. Returns 1 on success and 0 if
+// an error occurs. (Child processes may exit with a failure rather than
+// returning.)
+static int RunAsProcesses(SharedState *shared_state) {
+  PluginState *plugins = shared_state->plugins;
+  int i, child_status, all_ok, plugin_count;
+  pid_t *pids = NULL;
+  pid_t child_pid = 0;
+  all_ok = 1;
+  plugin_count = shared_state->global_config->plugin_count;
+  pids = (pid_t *) malloc(plugin_count * sizeof(pid_t));
+  if (!pids) {
+    printf("Failed allocating space to hold PIDs.\n");
+    return 0;
+  }
+  memset(pids, 0, plugin_count * sizeof(pid_t));
+  for (i = 0; i < plugin_count; i++) {
+    child_pid = fork();
+    // The parent process can keep generating child processes.
+    if (child_pid != 0) {
+      pids[i] = child_pid;
+      continue;
+    }
+    // The child process will run the plugin and exit with a success if
+    // everything went OK.
+    if (!RunPlugin(plugins + i)) {
+      exit(EXIT_FAILURE);
+    }
+    exit(EXIT_SUCCESS);
+  }
+  // As the parent, ensure that each child exited and exited with EXIT_SUCCESS.
+  for (i = 0; i < plugin_count; i++) {
+    waitpid(pids[i], &child_status, 0);
+    if (!WIFEXITED(child_status)) {
+      printf("A child process ended without exiting properly.\n");
+      all_ok = 0;
+    } else if (WEXITSTATUS(child_status) != EXIT_SUCCESS) {
+      printf("A child process exited with an error.\n");
+      all_ok = 0;
+    }
+  }
+  free(pids);
+  return all_ok;
+}
+
+// Runs plugin instances in threads. Returns 1 on success and 0 if an error
+// occurs.
+static int RunAsThreads(SharedState *shared_state) {
+  PluginState *plugins = shared_state->plugins;
+  pthread_t *threads = NULL;
+  int i, result, to_return, plugin_count;
+  void *thread_result;
+  plugin_count = shared_state->global_config->plugin_count;
+  threads = (pthread_t *) malloc(plugin_count * sizeof(pthread_t));
+  if (!threads) {
+    printf("Failed allocating space to hold thread IDs.\n");
+    return 0;
+  }
+  memset(threads, 0, plugin_count * sizeof(pthread_t));
+  to_return = 1;
+  for (i = 0; i < plugin_count; i++) {
+    result = pthread_create(threads + i, NULL, RunPlugin, plugins + i);
+    if (result != 0) {
+      printf("Failed starting a thread: %d\n", result);
+      to_return = 0;
+      break;
+    }
+  }
+  // Wait on threads in reverse order, in case not all of them were created.
+  i--;
+  for (; i >= 0; i--) {
+    result = pthread_join(threads[i], &thread_result);
+    if (result != 0) {
+      printf("Failed joining thread for plugin %d: %d\n", i, result);
+      to_return = 0;
+      continue;
+    }
+    if (!thread_result) {
+      printf("A child thread exited with an error.\n");
+      to_return = 0;
+    }
+  }
+  free(threads);
+  return to_return;
+}
+
 int main(int argc, char **argv) {
+  int result;
   char *config_content = NULL;
   SharedState *shared_state = NULL;
-
   if (argc != 2) {
     printf("Usage: %s <path to JSON config file>\n", argv[0]);
     return 1;
@@ -308,6 +808,16 @@ int main(int argc, char **argv) {
   }
   shared_state->barrier_created = 1;
   shared_state->starting_seconds = CurrentSeconds();
-  // TODO: Actually run the plugins.
+  if (shared_state->global_config->use_processes) {
+    result = RunAsProcesses(shared_state);
+  } else {
+    result = RunAsThreads(shared_state);
+  }
+  if (!result) {
+    printf("An error occurred executing one or more plugins.\n");
+  } else {
+    printf("All plugins completed successfully.\n");
+  }
+  Cleanup(shared_state);
   return 0;
 }
