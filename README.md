@@ -4,7 +4,7 @@ HIP Plugin Framework
 About
 -----
 
-This project is based on the [CUDA Scheduling Examiner][https://github.com/yalue/cuda_scheduling_examiner_mirror]
+This project is based on the [CUDA Scheduling Examiner](https://github.com/yalue/cuda_scheduling_examiner_mirror)
 framework, which made it convenient to configure and examine the behavior of
 multiple GPU-sharing tasks on NVIDIA.  The HIP plugin framework is
 architecturally similar, but intended primarily to carry out a similar task on
