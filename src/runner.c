@@ -440,6 +440,12 @@ static int WriteOutputHeader(PluginState *state) {
   if (fprintf(output, "\"plugin_name\": \"%s\",\n", buffer) < 0) {
     return 0;
   }
+  if (state->config->label) {
+    SanitizeJSONString(state->config->label, buffer, sizeof(buffer));
+    if (fprintf(output, "\"label\": \"%s\",\n", buffer) < 0) {
+      return 0;
+    }
+  }
   if (fprintf(output, "\"release_time\": %f,\n",
     state->config->release_time) < 0) {
     return 0;
@@ -548,7 +554,7 @@ static int WriteTimesToOutput(FILE *output, TimingInformation *times,
     }
     // We're done printing information about this kernel, print the CPU core as
     // a sanity check.
-    if (fprintf(output, ", \"cpu_core\": %d}", sched_getcpu()) < 0) {
+    if (fprintf(output, "\"cpu_core\": %d}", sched_getcpu()) < 0) {
       return 0;
     }
   }
