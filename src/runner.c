@@ -229,7 +229,6 @@ static int64_t GetMaxIterations(PluginState *state) {
 // configuration must have already been loaded for this to succeed. Returns 0
 // on error.
 static int CreatePluginStates(SharedState *shared_state) {
-  RegisterPluginFunction register_plugin = NULL;
   PluginConfiguration *plugin_config = NULL;
   int i = 0;
   int cpu_count, current_cpu_core;
@@ -283,33 +282,12 @@ static int CreatePluginStates(SharedState *shared_state) {
         strerror(errno));
       goto ErrorCleanup;
     }
-    // Finally, open the shared library and get the function pointers.
-    new_list[i].library_handle = dlopen(plugin_config->filename, RTLD_NOW);
-    if (!new_list[i].library_handle) {
-      printf("Failed opening shared library %s: %s\n", plugin_config->filename,
-        dlerror());
-      fflush(stdout);
-      goto ErrorCleanup;
-    }
-    register_plugin = (RegisterPluginFunction) dlsym(
-      new_list[i].library_handle, "RegisterPlugin");
-    if (!register_plugin) {
-      printf("The shared library %s doesn't export RegisterPlugin.\n",
-        plugin_config->filename);
-      goto ErrorCleanup;
-    }
-    if (!register_plugin(&(new_list[i].functions))) {
-      printf("The shared library %s's RegisterFunctions returned an error.\n",
-        plugin_config->filename);
-      goto ErrorCleanup;
-    }
   }
   shared_state->plugins = new_list;
   return 1;
 ErrorCleanup:
   for (i = 0; i < config->plugin_count; i++) {
     if (new_list[i].output_file) fclose(new_list[i].output_file);
-    if (new_list[i].library_handle) dlclose(new_list[i].library_handle);
   }
   free(new_list);
   return 0;
@@ -496,7 +474,7 @@ static int WriteTimesToOutput(FILE *output, TimingInformation *times,
     SharedState *shared_state) {
   // Times are printed relative to the program start time in order to make the
   // times smaller in the logs, rather than very large numbers.
-  int i;
+  int i, j, block_time_count;
   char sanitized_name[SANITIZE_JSON_BUFFER_SIZE];
   double t;
   KernelTimes *kernel_times = NULL;
@@ -526,6 +504,7 @@ static int WriteTimesToOutput(FILE *output, TimingInformation *times,
       kernel_times->shared_memory) < 0) {
       return 0;
     }
+    // TODO (next, 2): Include block times in the output. Convert to seconds?
     // Print the kernel launch times for this kernel.
     if (fprintf(output, "\"kernel_launch_times\": [") < 0) {
       return 0;
@@ -552,9 +531,32 @@ static int WriteTimesToOutput(FILE *output, TimingInformation *times,
     if (fprintf(output, "%.9f], ", t) < 0) {
       return 0;
     }
+    // Finally, include block times for the output. Try to convert them to
+    // seconds using the reported clock rate. (TODO: Is the clock rate reported
+    // by hipGetDeviceProperties actually going to lead to a steady time, or
+    // can the clock rate change during kernel execution?)
+    if (fprintf(output, "\"block_times\": [") < 0) {
+      return 0;
+    }
+    // Remember we have both a start and end time for every block.
+    block_time_count = kernel_times->block_count * 2;
+    for (j = 0; j < block_time_count; j++) {
+      // The memory clock rate is in kHz.
+      t = (double) kernel_times->block_times[j];
+      t /= ((double) times->memory_clock_rate) * 1000.0;
+      if (fprintf(output, "%.9f", t) < 0) {
+        return 0;
+      }
+      if (j < (block_time_count - 1)) {
+        if (fprintf(output, ",") < 0) {
+          return 0;
+        }
+      }
+    }
+
     // We're done printing information about this kernel, print the CPU core as
     // a sanity check.
-    if (fprintf(output, "\"cpu_core\": %d}", sched_getcpu()) < 0) {
+    if (fprintf(output, "], \"cpu_core\": %d}", sched_getcpu()) < 0) {
       return 0;
     }
   }
@@ -566,6 +568,36 @@ static int WriteTimesToOutput(FILE *output, TimingInformation *times,
 // initialized.
 static double GlobalSecondsElapsed(PluginState *state) {
   return CurrentSeconds() - state->shared_state->starting_seconds;
+}
+
+// Loads the plugin's shared library and finds the exported functions. Returns
+// 0 on error. All other data in the PluginState struct must be initialized
+// before calling this.
+static int LoadPluginLibrary(PluginState *plugin) {
+  RegisterPluginFunction register_plugin = NULL;
+  plugin->library_handle = dlopen(plugin->config->filename, RTLD_NOW);
+  if (!plugin->library_handle) {
+    printf("Failed opening shared library %s: %s\n", plugin->config->filename,
+      dlerror());
+    return 0;
+  }
+  register_plugin = (RegisterPluginFunction) dlsym(plugin->library_handle,
+    "RegisterPlugin");
+  if (!register_plugin) {
+    printf("The shared library %s doesn't export RegisterPlugin.\n",
+      plugin->config->filename);
+    dlclose(plugin->library_handle);
+    plugin->library_handle = NULL;
+    return 0;
+  }
+  if (!register_plugin(&(plugin->functions))) {
+    printf("The shared library %s's RegisterFunctions function returned an "
+      "error.\n", plugin->config->filename);
+    dlclose(plugin->library_handle);
+    plugin->library_handle = NULL;
+    return 0;
+  }
+  return 1;
 }
 
 // Runs a single plugin instance. This is usually called from a separate thread
@@ -580,12 +612,16 @@ static void* RunPlugin(void *data) {
   int64_t max_iterations;
   double start_time, time_limit;
   PluginState *state = (PluginState *) data;
-  PluginFunctions *plugin_functions = &(state->functions);
   ProcessBarrier *barrier = &(state->shared_state->barrier);
   int barrier_local_sense = 0;
   TimingInformation timing_info;
   void *user_data = NULL;
-  const char *name = plugin_functions->get_name();
+  const char *name;
+  if (!LoadPluginLibrary(state)) {
+    printf("Failed loading a plugin's shared library file.\n");
+    return NULL;
+  }
+  name = state->functions.get_name();
   if (!InitializeInitializationParameters(state, &initialization_parameters)) {
     printf("Failed copying initialization parameters from config.\n");
     return NULL;
@@ -597,7 +633,7 @@ static void* RunPlugin(void *data) {
     return NULL;
   }
   start_time = CurrentSeconds();
-  user_data = plugin_functions->initialize(&initialization_parameters);
+  user_data = state->functions.initialize(&initialization_parameters);
   if (!user_data) {
     printf("Failed initializing instance of %s.\n", name);
     return NULL;
@@ -607,17 +643,17 @@ static void* RunPlugin(void *data) {
   fflush(stdout);
   if (!WriteOutputHeader(state)) {
     printf("Failed writing metadata to log file.\n");
-    plugin_functions->cleanup(user_data);
+    state->functions.cleanup(user_data);
     return NULL;
   }
   if (!BarrierWait(barrier, &barrier_local_sense)) {
     printf("Failed waiting for post-initialization synchronization.\n");
-    plugin_functions->cleanup(user_data);
+    state->functions.cleanup(user_data);
     return NULL;
   }
   // This function does nothing if the release time is 0 or lower.
   if (!SleepSeconds(state->config->release_time)) {
-    plugin_functions->cleanup(user_data);
+    state->functions.cleanup(user_data);
     return NULL;
   }
   i = 0;
@@ -635,29 +671,29 @@ static void* RunPlugin(void *data) {
     if (state->shared_state->global_config->sync_every_iteration) {
       if (!BarrierWait(barrier, &barrier_local_sense)) {
         printf("Failed waiting to sync before an iteration.\n");
-        plugin_functions->cleanup(user_data);
+        state->functions.cleanup(user_data);
         return NULL;
       }
     }
     // A single plugin iteration consists of copy_in, execute, and copy_out.
     cpu_times.copy_in_start = GlobalSecondsElapsed(state);
-    if (!plugin_functions->copy_in(user_data)) {
+    if (!state->functions.copy_in(user_data)) {
       printf("Plugin %s copy in failed.\n", name);
-      plugin_functions->cleanup(user_data);
+      state->functions.cleanup(user_data);
       return NULL;
     }
     cpu_times.copy_in_end = GlobalSecondsElapsed(state);
     cpu_times.execute_start = GlobalSecondsElapsed(state);
-    if (!plugin_functions->execute(user_data)) {
+    if (!state->functions.execute(user_data)) {
       printf("Plugin %s execute failed.\n", name);
-      plugin_functions->cleanup(user_data);
+      state->functions.cleanup(user_data);
       return NULL;
     }
     cpu_times.execute_end = GlobalSecondsElapsed(state);
     cpu_times.copy_out_start = GlobalSecondsElapsed(state);
-    if (!plugin_functions->copy_out(user_data, &timing_info)) {
+    if (!state->functions.copy_out(user_data, &timing_info)) {
       printf("Plugin %s copy out failed.\n", name);
-      plugin_functions->cleanup(user_data);
+      state->functions.cleanup(user_data);
       return NULL;
     }
     cpu_times.copy_out_end = GlobalSecondsElapsed(state);
@@ -665,13 +701,13 @@ static void* RunPlugin(void *data) {
     // output file.
     if (!WriteCPUTimesToOutput(state->output_file, &cpu_times)) {
       printf("Failed writing CPU times for plugin %s to output file.\n", name);
-      plugin_functions->cleanup(user_data);
+      state->functions.cleanup(user_data);
       return NULL;
     }
     if (!WriteTimesToOutput(state->output_file, &timing_info,
       state->shared_state)) {
       printf("Failed writing times for plugin %s to output file.\n", name);
-      plugin_functions->cleanup(user_data);
+      state->functions.cleanup(user_data);
       return NULL;
     }
   }
@@ -679,10 +715,10 @@ static void* RunPlugin(void *data) {
   // the GPU (in other cases, cleaning up occurred due to an error).
   if (!BarrierWait(barrier, &barrier_local_sense)) {
     printf("Failed waiting to sync before cleanup.\n");
-    plugin_functions->cleanup(user_data);
+    state->functions.cleanup(user_data);
     return NULL;
   }
-  plugin_functions->cleanup(user_data);
+  state->functions.cleanup(user_data);
   if (fprintf(state->output_file, "\n]}") < 0) {
     printf("Failed writing footer to output file.\n");
     return NULL;

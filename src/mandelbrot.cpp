@@ -51,8 +51,10 @@ typedef struct {
   // data_size and thread_count initialization parameters.
   int block_count;
   int thread_count;
+  uint64_t *device_block_times;
   // Holds times that are shared with the plugin host.
   KernelTimes kernel_times;
+  int device_id;
 } PluginState;
 
 // Implements the Cleanup() function required by the plugin interface.
@@ -60,6 +62,10 @@ static void Cleanup(void *data) {
   PluginState *state = (PluginState *) data;
   if (state->device_image) hipFree(state->device_image);
   if (state->host_image) hipHostFree(state->host_image);
+  if (state->device_block_times) hipFree(state->device_block_times);
+  if (state->kernel_times.block_times) {
+    hipHostFree(state->kernel_times.block_times);
+  }
   if (state->stream_created) {
     CheckHIPError(hipStreamDestroy(state->stream));
   }
@@ -92,6 +98,15 @@ static int AllocateMemory(PluginState *state) {
     return 0;
   }
   if (!CheckHIPError(hipMalloc(&(state->device_image), buffer_size))) return 0;
+  // Next, allocate a buffer to hold block start and end times.
+  buffer_size = state->block_count * 2 * sizeof(uint64_t);
+  if (!CheckHIPError(hipMalloc(&(state->device_block_times), buffer_size))) {
+    return 0;
+  }
+  if (!CheckHIPError(hipHostMalloc(&(state->kernel_times.block_times),
+    buffer_size))) {
+    return 0;
+  }
   return 1;
 }
 
@@ -108,6 +123,7 @@ static void* Initialize(InitializationParameters *params) {
     free(state);
     return NULL;
   }
+  state->device_id = params->device_id;
   state->thread_count = params->thread_count;
   dimensions = &(state->dimensions);
   dimensions->w = IMAGE_PIXELS_WIDE;
@@ -145,14 +161,14 @@ static void* Initialize(InitializationParameters *params) {
     return NULL;
   }
   state->stream_created = 1;
-  if (!AllocateMemory(state)) {
-    Cleanup(state);
-    return NULL;
-  }
   state->kernel_times.kernel_name = "mandelbrot";
   state->kernel_times.thread_count = params->thread_count;
   state->kernel_times.block_count = state->block_count;
   state->kernel_times.shared_memory = 0;
+  if (!AllocateMemory(state)) {
+    Cleanup(state);
+    return NULL;
+  }
   return state;
 }
 
@@ -164,11 +180,14 @@ static int CopyIn(void *data) {
 // The kernel for rendering the mandelbrot set. Not very optimized, but that's
 // not important for a simple benchmarking use case.
 __global__ void MandelbrotKernel(uint8_t *buffer, FractalDimensions dims,
-  uint64_t max_iterations) {
+  uint64_t max_iterations, uint64_t *block_times) {
   uint64_t i;
   double start_real, start_imag, real, imag, tmp, magnitude;
   int buffer_size, index, row, col;
   uint8_t escaped = 0;
+  if (hipThreadIdx_x == 0) {
+    block_times[hipBlockIdx_x * 2] = clock64();
+  }
   buffer_size = dims.w * dims.h;
   index = (hipBlockIdx_x * hipBlockDim_x) + hipThreadIdx_x;
   if (index > buffer_size) return;
@@ -192,6 +211,10 @@ __global__ void MandelbrotKernel(uint8_t *buffer, FractalDimensions dims,
     magnitude = (real * real) + (imag * imag);
   }
   buffer[index] = escaped;
+  __syncthreads();
+  if (hipThreadIdx_x == 0) {
+    block_times[hipBlockIdx_x * 2 + 1] = clock64();
+  }
 }
 
 static int Execute(void *data) {
@@ -199,7 +222,7 @@ static int Execute(void *data) {
   state->kernel_times.kernel_launch_times[0] = CurrentSeconds();
   hipLaunchKernelGGL(MandelbrotKernel, state->block_count, state->thread_count,
     0, state->stream, state->device_image, state->dimensions,
-    state->max_iterations);
+    state->max_iterations, state->device_block_times);
   state->kernel_times.kernel_launch_times[1] = CurrentSeconds();
   if (!CheckHIPError(hipStreamSynchronize(state->stream))) return 0;
   state->kernel_times.kernel_launch_times[2] = CurrentSeconds();
@@ -213,10 +236,19 @@ static int CopyOut(void *data, TimingInformation *times) {
     image_size, hipMemcpyDeviceToHost, state->stream))) {
     return 0;
   }
+  if (!CheckHIPError(hipMemcpyAsync(state->kernel_times.block_times,
+    state->device_block_times, state->block_count * 2 * sizeof(uint64_t),
+    hipMemcpyDeviceToHost, state->stream))) {
+    return 0;
+  }
   times->kernel_count = 1;
   times->kernel_times = &(state->kernel_times);
   times->resulting_data_size = image_size;
   times->resulting_data = state->host_image;
+  if (!CheckHIPError(GetMemoryClockRate(state->device_id,
+    &(times->memory_clock_rate)))) {
+    return 0;
+  }
   if (!CheckHIPError(hipStreamSynchronize(state->stream))) return 0;
   return 1;
 }

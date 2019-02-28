@@ -21,6 +21,11 @@ int InternalHIPErrorCheck(hipError_t result, const char *fn, const char *file,
 hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint64_t *mask,
     int mask_count);
 
+// Sets the memory_clock_rate value to the rate reported by the
+// hipGetDeviceProperties function. Returns hipSuccess on success. Remember
+// that the rate will be specified in kHz.
+hipError_t GetMemoryClockRate(int device_id, int *memory_clock_rate);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

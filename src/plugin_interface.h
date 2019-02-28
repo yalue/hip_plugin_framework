@@ -53,6 +53,10 @@ typedef struct {
   // before and after the kernel was launched. The third entry is the time
   // after synchronization completes when the kernel is finished executing.
   double kernel_launch_times[3];
+  // This includes the start and end time for every block launched on the GPU,
+  // in *GPU clock cycles*. Even-numbered positions contain start times, and
+  // odd-numbered positions contain end times.
+  uint64_t *block_times;
 } KernelTimes;
 
 // This holds the measurements obtained during a single iteration of the
@@ -62,6 +66,10 @@ typedef struct {
 typedef struct {
   // The number of kernels run by the plugin in this iteration.
   int kernel_count;
+  // This will be set to the memory clock rate, as reported by
+  // hipGetDeviceProperties. (HIP appears to use the memory clock for clock64.)
+  // This value will be in kHz.
+  int memory_clock_rate;
   // This must contain one KernelTimes struct per kernel, with a total of
   // kernel_count entries.
   KernelTimes *kernel_times;
