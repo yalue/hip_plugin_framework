@@ -7,7 +7,7 @@ PLUGIN_DEPENDENCIES := src/plugin_interface.h obj/plugin_utilities.o \
 
 all: directories plugins bin/runner
 
-plugins: bin/mandelbrot.so
+plugins: bin/mandelbrot.so bin/counter_spin.so
 
 directories:
 	mkdir -p obj
@@ -35,6 +35,10 @@ obj/plugin_utilities.o: src/plugin_utilities.c src/plugin_utilities.h
 
 bin/mandelbrot.so: src/mandelbrot.cpp $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/mandelbrot.so src/mandelbrot.cpp \
+		obj/plugin_utilities.o obj/plugin_hip_utilities.o
+
+bin/counter_spin.so: src/counter_spin.cpp $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/counter_spin.so src/counter_spin.cpp \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o
 
 bin/runner: obj/runner.o obj/cJSON.o obj/parse_config.o obj/barrier_wait.o

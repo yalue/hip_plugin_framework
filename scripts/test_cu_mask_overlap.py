@@ -46,6 +46,7 @@ def generate_config(cu_count, competitor_cu_count, overlap_amount, total_cus):
         "gpu_device_id": 0,
         "pin_cpus": True,
         "sync_every_iteration": True,
+        "use_processes": True,
         "plugins": [task_config, competitor_config]
     }
     return json.dumps(overall_config)

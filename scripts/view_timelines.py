@@ -25,10 +25,11 @@ def get_kernel_timeline(kernel_times):
     # Sort times in reverse order, so the earliest times will be popped first.
     start_times.sort(reverse = True)
     end_times.sort(reverse = True)
-    # Initialize the timeline to return so that 0 threads are running at time 0
+    # Initialize the timeline to return so that 0 threads are running just
+    # before the first start time.
     timeline_times = []
     timeline_values = []
-    timeline_times.append(0.0)
+    timeline_times.append(start_times[-1] * 0.999999)
     timeline_values.append(0)
     # Next, iterate over start and end times and keep a running count of how
     # many threads are running.

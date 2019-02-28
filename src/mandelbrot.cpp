@@ -77,11 +77,11 @@ static void Cleanup(void *data) {
 // override the max iterations. Returns 0 on error.
 static int SetMaxIterations(const char *arg, PluginState *state) {
   int64_t parsed_value;
+  char *end = NULL;
   if (!arg || (strlen(arg) == 0)) {
     state->max_iterations = DEFAULT_MAX_ITERATIONS;
     return 1;
   }
-  char *end = NULL;
   parsed_value = strtoll(arg, &end, 10);
   if ((*end != 0) || (parsed_value < 0)) {
     printf("Invalid max iterations: %s\n", arg);
@@ -172,8 +172,16 @@ static void* Initialize(InitializationParameters *params) {
   return state;
 }
 
-// There is no data to copy in to the GPU for this.
+// This initializes the block_times buffer on the GPU so that the algorithm
+// for recording block times can work without synchronization.
 static int CopyIn(void *data) {
+  PluginState *state = (PluginState *) data;
+  size_t times_size = state->block_count * 2 * sizeof(uint64_t);
+  if (!CheckHIPError(hipMemsetAsync(state->device_block_times, 0xff,
+    times_size, state->stream))) {
+    return 0;
+  }
+  if (!CheckHIPError(hipStreamSynchronize(state->stream))) return 0;
   return 1;
 }
 
@@ -185,8 +193,12 @@ __global__ void MandelbrotKernel(uint8_t *buffer, FractalDimensions dims,
   double start_real, start_imag, real, imag, tmp, magnitude;
   int buffer_size, index, row, col;
   uint8_t escaped = 0;
-  if (hipThreadIdx_x == 0) {
-    block_times[hipBlockIdx_x * 2] = clock64();
+  uint64_t start_clock = clock64();
+  // This requires always initializing block times to the maximum integer, but
+  // should ensure we have something very close to the earliest possible start
+  // time for a given block.
+  if (start_clock < block_times[hipBlockIdx_x * 2]) {
+    block_times[hipBlockIdx_x * 2] = start_clock;
   }
   buffer_size = dims.w * dims.h;
   index = (hipBlockIdx_x * hipBlockDim_x) + hipThreadIdx_x;
@@ -211,10 +223,9 @@ __global__ void MandelbrotKernel(uint8_t *buffer, FractalDimensions dims,
     magnitude = (real * real) + (imag * imag);
   }
   buffer[index] = escaped;
-  __syncthreads();
-  if (hipThreadIdx_x == 0) {
-    block_times[hipBlockIdx_x * 2 + 1] = clock64();
-  }
+  // This will always be set by the last thread to execute, or at least by a
+  // thread that is very close to the last one.
+  block_times[hipBlockIdx_x * 2 + 1] = clock64();
 }
 
 static int Execute(void *data) {
