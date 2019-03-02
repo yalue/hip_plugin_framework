@@ -5,7 +5,7 @@ CFLAGS := -Wall -Werror -O3 -g -fPIC
 PLUGIN_DEPENDENCIES := src/plugin_interface.h obj/plugin_utilities.o \
 	obj/plugin_hip_utilities.o
 
-all: directories plugins bin/runner
+all: directories plugins bin/runner bin/hip_host_utilities.so
 
 plugins: bin/mandelbrot.so bin/counter_spin.so
 
@@ -40,6 +40,10 @@ bin/mandelbrot.so: src/mandelbrot.cpp $(PLUGIN_DEPENDENCIES)
 bin/counter_spin.so: src/counter_spin.cpp $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/counter_spin.so src/counter_spin.cpp \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o
+
+bin/hip_host_utilities.so: src/hip_host_utilities.cpp src/plugin_interface.h
+	hipcc --shared $(CFLAGS) -o bin/hip_host_utilities.so \
+		src/hip_host_utilities.cpp
 
 bin/runner: obj/runner.o obj/cJSON.o obj/parse_config.o obj/barrier_wait.o
 	gcc $(CFLAGS) -o bin/runner obj/runner.o obj/cJSON.o obj/parse_config.o \

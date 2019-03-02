@@ -11,10 +11,30 @@ extern "C" {
 // The number of 64-bit values that can comprise the compute unit bitmask.
 #define COMPUTE_UNIT_MASK_ENTRIES (4)
 
+// This struct is filled in by the host, and passed to plugins for reference.
+// Typically, howerever, plugins should not rely on device-specific
+// information.
+typedef struct {
+  // The name of the device, as reported by HIP.
+  char device_name[256];
+  // The architecture of the device.
+  int gcn_architecture;
+  int compute_unit_count;
+  int threads_per_compute_unit;
+  // This will be a clock rate, in kHz. HIP appears to use the memory clock
+  // when calling clock64() in kernels.
+  int memory_clock_rate;
+  int warp_size;
+  // This will be set to the GPU's clock at the time the struct is populated.
+  // Usually, this will be used to determine a starting clock time.
+  uint64_t starting_clock;
+} DeviceInformation;
+
 // This struct is used to pass arguments to the plugin's initialize function.
 // Each plugin is not required to use every field, but all fields will always
 // be set by the caller regardless.
 typedef struct {
+  DeviceInformation *device_info;
   // The number of threads to be used in each block. This parameter is intended
   // to be used by kernels with 1-dimensional blocks that can use an adjustable
   // number of threads.
@@ -66,10 +86,6 @@ typedef struct {
 typedef struct {
   // The number of kernels run by the plugin in this iteration.
   int kernel_count;
-  // This will be set to the memory clock rate, as reported by
-  // hipGetDeviceProperties. (HIP appears to use the memory clock for clock64.)
-  // This value will be in kHz.
-  int memory_clock_rate;
   // This must contain one KernelTimes struct per kernel, with a total of
   // kernel_count entries.
   KernelTimes *kernel_times;

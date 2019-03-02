@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -51,6 +52,8 @@ typedef struct {
   int barrier_created;
   // A list of structs holding data for each individual plugin.
   struct PluginState_ *plugins;
+  // Information about the HIP device that the plugins will use.
+  DeviceInformation device_info;
 } SharedState;
 
 // Holds configuration data specific to a given plugin.
@@ -72,6 +75,10 @@ typedef struct PluginState_ {
 // The function pointer type for the registration function exported by plugin
 // shared libraries.
 typedef int (*RegisterPluginFunction)(PluginFunctions *functions);
+
+// The function pointer type for the GetDeviceInformation function exported by
+// the HIP utility shared library.
+typedef int (*GetDeviceInfoFunction)(int device_id, DeviceInformation *info);
 
 // Holds data about the time required to complete various phases in a single
 // iteration of a plugin.
@@ -105,6 +112,98 @@ static int SetBufferSize(void **buffer, size_t new_size) {
 static pid_t GetThreadID(void) {
   pid_t to_return = syscall(SYS_gettid);
   return to_return;
+}
+
+// Allocates a private shared memory buffer containing the given number of
+// bytes. Can be freed by using FreeSharedBuffer. Returns NULL on error.
+// Initializes the buffer to contain 0.
+static void* AllocateSharedBuffer(size_t size) {
+  void *to_return = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS |
+    MAP_SHARED, -1, 0);
+  if (to_return == MAP_FAILED) return NULL;
+  memset(to_return, 0, size);
+  return to_return;
+}
+
+// Frees a shared buffer returned by AllocateSharedBuffer.
+static void FreeSharedBuffer(void *buffer, size_t size) {
+  munmap(buffer, size);
+}
+
+// Fills in the HIP device information struct, jumping through a huge number of
+// hoops to avoid loading HIP in the parent process. Returns 0 on error.
+static int GetDeviceInfo(int device_id, DeviceInformation *info) {
+  char exe_path[512];
+  char lib_path[512];
+  void *buffer = NULL;
+  void *library_handle = NULL;
+  GetDeviceInfoFunction info_function = NULL;
+  pid_t pid = -1;
+  int status;
+  // Allocate a buffer in shared memory so it can be accessed by a child
+  // process.
+  buffer = AllocateSharedBuffer(sizeof(*info));
+  if (!buffer) {
+    printf("Failed allocating shared buffer for device info.\n");
+  }
+  memset(buffer, 0, sizeof(*info));
+  pid = fork();
+  if (pid < 0) {
+    printf("Failed creating a child process to get GPU device info: %s\n",
+      strerror(errno));
+    return 0;
+  }
+  if (pid == 0) {
+    // Load the library in the child process only! Afterwards, look up and call
+    // the GetDeviceInformation function, filling in the shared buffer.
+    if (readlink("/proc/self/exe", exe_path, sizeof(exe_path)) <= 0) {
+      printf("Failed reading the path of the host process executable: %s\n",
+        strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+    if (snprintf(lib_path, sizeof(lib_path), "%s/hip_host_utilities.so",
+      dirname(exe_path)) >= sizeof(lib_path)) {
+      printf("The path to hip_host_utilities.so was too long.\n");
+      exit(EXIT_FAILURE);
+    }
+    library_handle = dlopen(lib_path, RTLD_NOW);
+    if (!library_handle) {
+      printf("Failed loading library %s: %s\n", lib_path, dlerror());
+      exit(EXIT_FAILURE);
+    }
+    info_function = (GetDeviceInfoFunction) dlsym(library_handle,
+      "GetDeviceInformation");
+    if (!info_function) {
+      printf("Failed finding the GetDeviceInformation function: %s\n",
+        dlerror());
+      dlclose(library_handle);
+      exit(EXIT_FAILURE);
+    }
+    if (!info_function(device_id, (DeviceInformation *) buffer)) {
+      dlclose(library_handle);
+      exit(EXIT_FAILURE);
+    }
+    dlclose(library_handle);
+    exit(EXIT_SUCCESS);
+  }
+  // The parent will wait for the child to finish, then copy the contents from
+  // the shared buffer.
+  if (wait(&status) < 0) {
+    printf("failed waiting on the child process.\n");
+    FreeSharedBuffer(buffer, sizeof(*info));
+    return 0;
+  }
+  memcpy(info, buffer, sizeof(*info));
+  FreeSharedBuffer(buffer, sizeof(*info));
+  if (!WIFEXITED(status)) {
+    printf("The child process didn't exit normally.\n");
+    return 0;
+  }
+  if (WEXITSTATUS(status) != EXIT_SUCCESS) {
+    printf("The child process exited with an error.\n");
+    return 0;
+  }
+  return 1;
 }
 
 // Frees the PluginState objects in the list, along with the list itself.
@@ -404,6 +503,7 @@ static void SanitizeJSONString(const char *input, char *output,
 
 // Writes metadata to the output JSON file. Returns 0 on error.
 static int WriteOutputHeader(PluginState *state) {
+  DeviceInformation *info = &(state->shared_state->device_info);
   FILE *output = state->output_file;
   char buffer[SANITIZE_JSON_BUFFER_SIZE];
   if (fprintf(output, "{\n") < 0) {
@@ -428,6 +528,25 @@ static int WriteOutputHeader(PluginState *state) {
     state->config->release_time) < 0) {
     return 0;
   }
+  if (fprintf(output, "\"compute_unit_count\": %d,\n",
+    info->compute_unit_count) < 0) {
+    return 0;
+  }
+  if (fprintf(output, "\"threads_per_compute_unit\": %d,\n",
+    info->threads_per_compute_unit) < 0) {
+    return 0;
+  }
+  if (fprintf(output, "\"memory_clock_rate\": %d,\n",
+    info->memory_clock_rate) < 0) {
+    return 0;
+  }
+  if (fprintf(output, "\"warp_size\": %d,\n", info->warp_size) < 0) {
+    return 0;
+  }
+  if (fprintf(output, "\"starting_clock\": %llu,\n",
+    (unsigned long long) info->starting_clock) < 0) {
+    return 0;
+  }
   if (fprintf(output, "\"PID\": %d,\n", getpid()) < 0) {
     return 0;
   }
@@ -445,7 +564,8 @@ static int WriteOutputHeader(PluginState *state) {
 }
 
 // Writes the start and end CPU times for this iteration to the output file.
-static int WriteCPUTimesToOutput(FILE *output, CPUTimes *t) {
+static int WriteCPUTimesToOutput(PluginState *state, CPUTimes *t) {
+  FILE *output = state->output_file;
   if (fprintf(output, ",\n{\"copy_in_times\": [%.9f,%.9f], ", t->copy_in_start,
     t->copy_in_end) < 0) {
     return 0;
@@ -470,15 +590,17 @@ static int WriteCPUTimesToOutput(FILE *output, CPUTimes *t) {
 // output file. Returns 0 on error and 1 on success. Times will be written in a
 // floatig-point number of *seconds*, even though they are recorded in ns. This
 // code should not be included in plugin timing measurements.
-static int WriteTimesToOutput(FILE *output, TimingInformation *times,
-    SharedState *shared_state) {
-  // Times are printed relative to the program start time in order to make the
-  // times smaller in the logs, rather than very large numbers.
+static int WriteTimesToOutput(PluginState *state, TimingInformation *times) {
+  SharedState *shared_state = state->shared_state;
+  FILE *output = state->output_file;
   int i, j, block_time_count;
   char sanitized_name[SANITIZE_JSON_BUFFER_SIZE];
+  uint64_t memory_clock_rate;
+  uint64_t starting_clock;
   double t;
   KernelTimes *kernel_times = NULL;
-
+  memory_clock_rate = state->shared_state->device_info.memory_clock_rate;
+  starting_clock = state->shared_state->device_info.starting_clock;
   // Iterate over each kernel invocation
   for (i = 0; i < times->kernel_count; i++) {
     kernel_times = times->kernel_times + i;
@@ -504,7 +626,6 @@ static int WriteTimesToOutput(FILE *output, TimingInformation *times,
       kernel_times->shared_memory) < 0) {
       return 0;
     }
-    // TODO (next, 2): Include block times in the output. Convert to seconds?
     // Print the kernel launch times for this kernel.
     if (fprintf(output, "\"kernel_launch_times\": [") < 0) {
       return 0;
@@ -542,8 +663,8 @@ static int WriteTimesToOutput(FILE *output, TimingInformation *times,
     block_time_count = kernel_times->block_count * 2;
     for (j = 0; j < block_time_count; j++) {
       // The memory clock rate is in kHz.
-      t = (double) kernel_times->block_times[j];
-      t /= ((double) times->memory_clock_rate) * 1000.0;
+      t = (double) (kernel_times->block_times[j] - starting_clock);
+      t /= ((double) memory_clock_rate) * 1000.0;
       if (fprintf(output, "%.9f", t) < 0) {
         return 0;
       }
@@ -638,14 +759,13 @@ static void* RunPlugin(void *data) {
     printf("Failed initializing instance of %s.\n", name);
     return NULL;
   }
+  if (!WriteOutputHeader(state)) {
+    printf("Failed writing the output file header for %s.\n", name);
+    return NULL;
+  }
   printf("Plugin %s initialized in %f seconds.\n", name, CurrentSeconds() -
     start_time);
   fflush(stdout);
-  if (!WriteOutputHeader(state)) {
-    printf("Failed writing metadata to log file.\n");
-    state->functions.cleanup(user_data);
-    return NULL;
-  }
   if (!BarrierWait(barrier, &barrier_local_sense)) {
     printf("Failed waiting for post-initialization synchronization.\n");
     state->functions.cleanup(user_data);
@@ -699,13 +819,12 @@ static void* RunPlugin(void *data) {
     cpu_times.copy_out_end = GlobalSecondsElapsed(state);
     // Finally, write the timing data we obtained for this iteration to the
     // output file.
-    if (!WriteCPUTimesToOutput(state->output_file, &cpu_times)) {
+    if (!WriteCPUTimesToOutput(state, &cpu_times)) {
       printf("Failed writing CPU times for plugin %s to output file.\n", name);
       state->functions.cleanup(user_data);
       return NULL;
     }
-    if (!WriteTimesToOutput(state->output_file, &timing_info,
-      state->shared_state)) {
+    if (!WriteTimesToOutput(state, &timing_info)) {
       printf("Failed writing times for plugin %s to output file.\n", name);
       state->functions.cleanup(user_data);
       return NULL;
@@ -849,6 +968,12 @@ int main(int argc, char **argv) {
     return 1;
   }
   shared_state->barrier_created = 1;
+  if (!GetDeviceInfo(shared_state->global_config->gpu_device_id,
+    &(shared_state->device_info))) {
+    printf("Failed reading device information.\n");
+    Cleanup(shared_state);
+    return 1;
+  }
   shared_state->starting_seconds = CurrentSeconds();
   if (shared_state->global_config->use_processes) {
     result = RunAsProcesses(shared_state);

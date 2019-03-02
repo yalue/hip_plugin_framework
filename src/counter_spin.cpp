@@ -22,7 +22,6 @@ typedef struct {
   uint64_t *device_block_times;
   // Holds times that are shared with the plugin host.
   KernelTimes kernel_times;
-  int device_id;
 } PluginState;
 
 // Implements the Cleanup() function required by the plugin interface.
@@ -84,7 +83,6 @@ static void* Initialize(InitializationParameters *params) {
     Cleanup(state);
     return NULL;
   }
-  state->device_id = params->device_id;
   state->block_count = params->block_count;
   state->thread_count = params->thread_count;
   if (!SetLoopIterations(params->additional_info, state)) {
@@ -161,10 +159,6 @@ static int CopyOut(void *data, TimingInformation *times) {
   }
   times->kernel_count = 1;
   times->kernel_times = &(state->kernel_times);
-  if (!CheckHIPError(GetMemoryClockRate(state->device_id,
-    &(times->memory_clock_rate)))) {
-    return 0;
-  }
   if (!CheckHIPError(hipStreamSynchronize(state->stream))) return 0;
   return 1;
 }

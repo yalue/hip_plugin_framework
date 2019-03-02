@@ -30,12 +30,3 @@ hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint64_t *mask,
   *stream = to_create;
   return hipSuccess;
 }
-
-hipError_t GetMemoryClockRate(int device_id, int *memory_clock_rate) {
-  hipDeviceProp_t properties;
-  hipError_t result = hipGetDeviceProperties(&properties, device_id);
-  if (result != hipSuccess) return result;
-  *memory_clock_rate = properties.memoryClockRate;
-  return hipSuccess;
-}
-
