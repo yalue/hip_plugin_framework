@@ -278,10 +278,18 @@ def plot_scenario(plugins, name):
     total_timeline = get_total_timeline(plugins)
     min_time = min(total_timeline[0])
     max_time = max(total_timeline[0])
+    axes = figure.add_subplot(len(plugins) + 1, 1, 1)
+    total_timeline[0].append(max_time)
+    total_timeline[1].append(0)
+    max_threads = max(total_timeline[1])
+    set_axes_dimensions(axes, min_time, max_time, 0, max_threads)
+    axes.plot(total_timeline[0], total_timeline[1], color="k", lw=2)
+    axes.set_ylabel("# threads,\ntotal")
+    axes.set_xlabel("Time (seconds)")
     # Plot each timeline in a separate subplot
     for i in range(len(plugins)):
         plugin = plugins[i]
-        axes = figure.add_subplot(len(plugins), 1, i + 1)
+        axes = figure.add_subplot(len(plugins) + 1, 1, i + 2)
         timeline = get_thread_timeline(plugin)
         # Make sure all timelines extend to the right end of the plot
         timeline[0].append(max_time)

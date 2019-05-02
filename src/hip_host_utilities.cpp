@@ -34,6 +34,7 @@ int GetDeviceInformation(int device_id, DeviceInformation *info) {
   int name_length;
   uint64_t *device_clock = NULL;
   hipDeviceProp_t properties;
+  if (!CheckHIPError(hipSetDevice(device_id))) return 0;
   // First, read basic device information.
   if (!CheckHIPError(hipGetDeviceProperties(&properties, device_id))) return 0;
   info->memory_clock_rate = properties.memoryClockRate;

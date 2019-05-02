@@ -1,0 +1,16 @@
+{
+  "name": "Timer spin test",
+  "max_iterations": 1,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "use_processes": false,
+  "plugins": [
+    {
+      "filename": "./bin/timer_spin.so",
+      "log_name": "results/timer_spin_test.json",
+      "thread_count": 256,
+      "block_count": 1,
+      "additional_info": 100
+    }
+  ]
+}

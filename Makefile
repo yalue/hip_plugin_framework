@@ -5,9 +5,10 @@ CFLAGS := -Wall -Werror -O3 -g -fPIC
 PLUGIN_DEPENDENCIES := src/plugin_interface.h obj/plugin_utilities.o \
 	obj/plugin_hip_utilities.o
 
-all: directories plugins bin/runner bin/hip_host_utilities.so
+all: directories plugins bin/runner bin/hip_host_utilities.so bin/list_devices \
+	bin/test_clock
 
-plugins: bin/mandelbrot.so bin/counter_spin.so
+plugins: bin/mandelbrot.so bin/counter_spin.so bin/timer_spin.so
 
 directories:
 	mkdir -p obj
@@ -41,6 +42,10 @@ bin/counter_spin.so: src/counter_spin.cpp $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/counter_spin.so src/counter_spin.cpp \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o
 
+bin/timer_spin.so: src/timer_spin.cpp $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/timer_spin.so src/timer_spin.cpp \
+		obj/plugin_utilities.o obj/plugin_hip_utilities.o
+
 bin/hip_host_utilities.so: src/hip_host_utilities.cpp src/plugin_interface.h
 	hipcc --shared $(CFLAGS) -o bin/hip_host_utilities.so \
 		src/hip_host_utilities.cpp
@@ -48,6 +53,12 @@ bin/hip_host_utilities.so: src/hip_host_utilities.cpp src/plugin_interface.h
 bin/runner: obj/runner.o obj/cJSON.o obj/parse_config.o obj/barrier_wait.o
 	gcc $(CFLAGS) -o bin/runner obj/runner.o obj/cJSON.o obj/parse_config.o \
 		obj/barrier_wait.o obj/plugin_utilities.o -ldl -lpthread
+
+bin/list_devices: src/list_devices.cpp
+	hipcc -o bin/list_devices $(CFLAGS) src/list_devices.cpp
+
+bin/test_clock: src/test_clock.cpp
+	hipcc -o bin/test_clock $(CFLAGS) src/test_clock.cpp
 
 clean:
 	rm -r obj/

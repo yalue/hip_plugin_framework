@@ -1,6 +1,6 @@
-// This plugin spins on the GPU until a set number of iterations have been
-// completed. It takes a single additional_info parameter specifying the
-// number of loop iterations to run.
+// This plugin spins on the GPU until a set number of clock ticks have elapsed.
+// It takes a single additional_info parameter specifying the number of clock
+// ticks.
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,8 +17,8 @@ typedef struct {
   // This plugin can use an arbitrary number of threads and blocks.
   int block_count;
   int thread_count;
-  // The number of loop iterations each thread must spin for.
-  uint64_t iterations;
+  // The number of clock ticks each thread must wait for.
+  uint64_t ticks;
   uint64_t *device_block_times;
   // Holds times that are shared with the plugin host.
   KernelTimes kernel_times;
@@ -38,21 +38,21 @@ static void Cleanup(void *data) {
   free(state);
 }
 
-// Parses the additional_info argument to get the iteration count. Returns 0
-// on error.
-static int SetLoopIterations(const char *arg, PluginState *state) {
+// Parses the additional_info argument to get the clock ticks. Returns 0 on
+// error.
+static int SetClockTicks(const char *arg, PluginState *state) {
   int64_t parsed_value;
   char *end = NULL;
   if (!arg || (strlen(arg) == 0)) {
-    printf("A maximum iteration count is required for counter_spin\n");
+    printf("A number of clock ticks is required for timer_spin\n");
     return 0;
   }
   parsed_value = strtoll(arg, &end, 10);
   if ((*end != 0) || (parsed_value < 0)) {
-    printf("Invalid iteration count: %s\n", arg);
+    printf("Invalid clock tick count: %s\n", arg);
     return 0;
   }
-  state->iterations = parsed_value;
+  state->ticks = parsed_value;
   return 1;
 }
 
@@ -83,7 +83,7 @@ static void* Initialize(InitializationParameters *params) {
   }
   state->block_count = params->block_count;
   state->thread_count = params->thread_count;
-  if (!SetLoopIterations(params->additional_info, state)) {
+  if (!SetClockTicks(params->additional_info, state)) {
     Cleanup(state);
     return NULL;
   }
@@ -93,7 +93,7 @@ static void* Initialize(InitializationParameters *params) {
     return NULL;
   }
   state->stream_created = 1;
-  state->kernel_times.kernel_name = "counter_spin";
+  state->kernel_times.kernel_name = "timer_spin";
   state->kernel_times.thread_count = state->thread_count;
   state->kernel_times.block_count = state->block_count;
   state->kernel_times.shared_memory = 0;
@@ -117,19 +117,27 @@ static int CopyIn(void *data) {
   return 1;
 }
 
-// The kernel for spinning a certain number of iterations. The dummy argument
-// should be NULL, it exists to prevent optimizing out the loop.
-__global__ void CounterSpinKernel(uint64_t max_iterations, uint64_t *dummy,
+// The kernel for spinning until a certain number of clock ticks have elapsed.
+// The dummy argument should be NULL, it exists to prevent optimizing out the
+// loop.
+__global__ void TimerSpinKernel(uint64_t ticks, uint64_t *dummy,
   uint64_t *block_times) {
-  uint64_t i, accumulator;
+  uint64_t accumulator;
   uint64_t start_clock = clock64();
   if (start_clock < block_times[hipBlockIdx_x * 2]) {
     block_times[hipBlockIdx_x * 2] = start_clock;
   }
   accumulator = 0;
-  for (i = 0; i < max_iterations; i++) {
-    accumulator += i % hipBlockIdx_x;
+  while ((clock64() - start_clock) < ticks) {
+    continue;
   }
+  /*
+  current_clock = clock64();
+  while ((current_clock - start_clock) < ticks) {
+    accumulator += current_clock % hipBlockIdx_x;
+    current_clock = clock64();
+  }
+  */
   if (dummy) *dummy = accumulator;
   block_times[hipBlockIdx_x * 2 + 1] = clock64();
 }
@@ -137,9 +145,9 @@ __global__ void CounterSpinKernel(uint64_t max_iterations, uint64_t *dummy,
 static int Execute(void *data) {
   PluginState *state = (PluginState *) data;
   state->kernel_times.kernel_launch_times[0] = CurrentSeconds();
-  // Sadly, we need to pass the "junk" argument for this to compile.
-  hipLaunchKernelGGL(CounterSpinKernel, state->block_count,
-    state->thread_count, 0, state->stream, state->iterations,
+  printf("Starting to spin for %llu ticks.\n", (unsigned long long) state->ticks);
+  hipLaunchKernelGGL(TimerSpinKernel, state->block_count,
+    state->thread_count, 0, state->stream, state->ticks,
     (uint64_t *) NULL, state->device_block_times);
   state->kernel_times.kernel_launch_times[1] = CurrentSeconds();
   if (!CheckHIPError(hipStreamSynchronize(state->stream))) return 0;
@@ -162,7 +170,7 @@ static int CopyOut(void *data, TimingInformation *times) {
 }
 
 static const char* GetName(void) {
-  return "Counter Spin";
+  return "Timer Spin";
 }
 
 int RegisterPlugin(PluginFunctions *functions) {
