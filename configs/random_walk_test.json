@@ -1,0 +1,20 @@
+{
+  "name": "Random walk test",
+  "max_iterations": 1,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "use_processes": false,
+  "plugins": [
+    {
+      "filename": "./bin/random_walk.so",
+      "log_name": "results/random_walk_test.json",
+      "thread_count": 512,
+      "block_count": 1000,
+      "additional_info": {
+        "iterations": 1500,
+        "comment": "This is a 16MB buffer",
+        "buffer_size": 16777216
+      }
+    }
+  ]
+}

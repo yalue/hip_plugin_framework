@@ -8,7 +8,8 @@ PLUGIN_DEPENDENCIES := src/plugin_interface.h obj/plugin_utilities.o \
 all: directories plugins bin/runner bin/hip_host_utilities.so bin/list_devices \
 	bin/test_clock
 
-plugins: bin/mandelbrot.so bin/counter_spin.so bin/timer_spin.so
+plugins: bin/mandelbrot.so bin/counter_spin.so bin/timer_spin.so \
+	bin/random_walk.so
 
 directories:
 	mkdir -p obj
@@ -45,6 +46,10 @@ bin/counter_spin.so: src/counter_spin.cpp $(PLUGIN_DEPENDENCIES)
 bin/timer_spin.so: src/timer_spin.cpp $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/timer_spin.so src/timer_spin.cpp \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o
+
+bin/random_walk.so: src/random_walk.cpp obj/cJSON.o $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/random_walk.so src/random_walk.cpp \
+		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
 bin/hip_host_utilities.so: src/hip_host_utilities.cpp src/plugin_interface.h
 	hipcc --shared $(CFLAGS) -o bin/hip_host_utilities.so \
