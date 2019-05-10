@@ -23,7 +23,7 @@ def generate_config(competitor_cu_count, measure_random_walk):
     random_walk_buffer_size = 128 * 1024 * 1024
     block_size = 256
     blocks_per_cu = 2048 / block_size
-    if meaure_random_walk:
+    if measure_random_walk:
         measured_task_config = {
             "label": str(competitor_cu_count),
             "log_name": "results/random_walk_vs_%d_cu_random_walk.json" % (
