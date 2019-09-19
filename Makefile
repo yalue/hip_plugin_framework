@@ -1,4 +1,4 @@
-.PHONY: all clean plugins directories
+.PHONY: all clean plugins directories rodinia_plugins
 
 CFLAGS := -Wall -Werror -O3 -g -fPIC
 
@@ -13,7 +13,9 @@ all: directories plugins bin/runner bin/hip_host_utilities.so bin/list_devices \
 plugins: directories bin/mandelbrot.so bin/counter_spin.so bin/timer_spin.so \
 	bin/random_walk.so
 
-rodinia_plugins: directories bin/gaussian.so
+rodinia_plugins: directories obj/cJSON.o obj/plugin_utilities.o \
+	obj/plugin_hip_utilities.o
+	cd $(RODINIA_DIR) && make
 
 directories:
 	mkdir -p obj
@@ -55,10 +57,6 @@ bin/random_walk.so: src/random_walk.cpp obj/cJSON.o $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/random_walk.so src/random_walk.cpp \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
-bin/gaussian.so: $(RODINIA_DIR)/gaussian.cpp $(PLUGIN_DEPENDENCIES)
-	hipcc --shared $(CFLAGS) -o bin/gaussian.so $(RODINIA_DIR)/gaussian.cpp \
-		obj/plugin_utilities.o obj/plugin_hip_utilities.o -Isrc/
-
 bin/hip_host_utilities.so: src/hip_host_utilities.cpp src/plugin_interface.h
 	hipcc --shared $(CFLAGS) -o bin/hip_host_utilities.so \
 		src/hip_host_utilities.cpp
@@ -76,3 +74,4 @@ bin/test_clock: src/test_clock.cpp
 clean:
 	rm -r obj/
 	rm -r bin/
+
