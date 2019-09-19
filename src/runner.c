@@ -661,6 +661,8 @@ static int WriteTimesToOutput(PluginState *state, TimingInformation *times) {
     }
     // Remember we have both a start and end time for every block.
     block_time_count = kernel_times->block_count * 2;
+    // Don't fill in the block times if the plugin didn't provide them.
+    if (kernel_times->block_times == NULL) block_time_count = 0;
     for (j = 0; j < block_time_count; j++) {
       // The memory clock rate is in kHz.
       t = (double) (kernel_times->block_times[j] - starting_clock);
@@ -762,6 +764,24 @@ static void* RunPlugin(void *data) {
   if (!WriteOutputHeader(state)) {
     printf("Failed writing the output file header for %s.\n", name);
     return NULL;
+  }
+  // Do the warmup iteration if required.
+  if (state->shared_state->global_config->do_warmup) {
+    if (!state->functions.copy_in(user_data)) {
+      printf("Plugin %s copy in failed (warm-up).\n", name);
+      state->functions.cleanup(user_data);
+      return NULL;
+    }
+    if (!state->functions.execute(user_data)) {
+      printf("Plugin %s execute failed (warm-up).\n", name);
+      state->functions.cleanup(user_data);
+      return NULL;
+    }
+    if (!state->functions.copy_out(user_data, &timing_info)) {
+      printf("Plugin %s copy out failed (warm-up).\n", name);
+      state->functions.cleanup(user_data);
+      return NULL;
+    }
   }
   printf("Plugin %s initialized in %f seconds.\n", name, CurrentSeconds() -
     start_time);

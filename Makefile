@@ -5,11 +5,15 @@ CFLAGS := -Wall -Werror -O3 -g -fPIC
 PLUGIN_DEPENDENCIES := src/plugin_interface.h obj/plugin_utilities.o \
 	obj/plugin_hip_utilities.o
 
+RODINIA_DIR := src/third_party/rodinia_plugins
+
 all: directories plugins bin/runner bin/hip_host_utilities.so bin/list_devices \
 	bin/test_clock
 
-plugins: bin/mandelbrot.so bin/counter_spin.so bin/timer_spin.so \
+plugins: directories bin/mandelbrot.so bin/counter_spin.so bin/timer_spin.so \
 	bin/random_walk.so
+
+rodinia_plugins: directories bin/gaussian.so
 
 directories:
 	mkdir -p obj
@@ -50,6 +54,10 @@ bin/timer_spin.so: src/timer_spin.cpp $(PLUGIN_DEPENDENCIES)
 bin/random_walk.so: src/random_walk.cpp obj/cJSON.o $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/random_walk.so src/random_walk.cpp \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
+
+bin/gaussian.so: $(RODINIA_DIR)/gaussian.cpp $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/gaussian.so $(RODINIA_DIR)/gaussian.cpp \
+		obj/plugin_utilities.o obj/plugin_hip_utilities.o -Isrc/
 
 bin/hip_host_utilities.so: src/hip_host_utilities.cpp src/plugin_interface.h
 	hipcc --shared $(CFLAGS) -o bin/hip_host_utilities.so \

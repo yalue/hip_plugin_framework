@@ -1,0 +1,17 @@
+{
+  "name": "Rodinia Gaussian Benchmark Test",
+  "max_iterations": 1000,
+  "max_time": 0,
+  "gpu_device_id": 1,
+  "use_processes": false,
+  "do_warmup": true,
+  "plugins": [
+    {
+      "comment": "The gaussian benchmark ignores thread and block count settings.",
+      "filename": "./bin/gaussian.so",
+      "log_name": "results/gaussian_test.json",
+      "thread_count": 0,
+      "block_count": 0
+    }
+  ]
+}

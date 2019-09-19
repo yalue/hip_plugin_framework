@@ -75,7 +75,8 @@ typedef struct {
   double kernel_launch_times[3];
   // This includes the start and end time for every block launched on the GPU,
   // in *GPU clock cycles*. Even-numbered positions contain start times, and
-  // odd-numbered positions contain end times.
+  // odd-numbered positions contain end times. Plugins may set this to NULL if
+  // they don't provide block times.
   uint64_t *block_times;
 } KernelTimes;
 

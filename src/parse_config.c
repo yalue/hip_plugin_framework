@@ -58,6 +58,7 @@ static int VerifyGlobalConfigKeys(cJSON *main_config) {
     "pin_cpus",
     "plugins",
     "sync_every_iteration",
+    "do_warmup",
     "comment",
   };
   keys_count = sizeof(valid_keys) / sizeof(char*);
@@ -398,6 +399,17 @@ GlobalConfiguration* ParseConfiguration(const char *config) {
     to_return->sync_every_iteration = tmp == cJSON_True;
   } else {
     to_return->sync_every_iteration = 0;
+  }
+  entry = cJSON_GetObjectItem(root, "do_warmup");
+  if (entry) {
+    tmp = entry->type;
+    if ((tmp != cJSON_True) && (tmp != cJSON_False)) {
+      printf("Invalid do_warmup setting in config.\n");
+      goto ErrorCleanup;
+    }
+    to_return->do_warmup = tmp == cJSON_True;
+  } else {
+    to_return->do_warmup = 0;
   }
   // Finally, parse the plugin list. Ensure that we've obtained a valid JSON
   // array for the plugins before calling ParsePluginList.

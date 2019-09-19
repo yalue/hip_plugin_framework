@@ -156,7 +156,7 @@ def plot_scenario(plugins, name, times_key):
     legend.draggable()
     return figure
 
-def show_plots(filenames, times_key="block_times"):
+def show_plots(filenames, times_key):
     """Takes a list of filenames, and generates one plot per scenario found in
     the files. See get_plugin_cdf for an explanation of the times_key
     argument."""
@@ -181,7 +181,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--directory",
         help="Directory containing result JSON files.", default='./results')
     parser.add_argument("-k", "--times_key",
-        help="JSON key name for the time property to be plot.", default="block_times")
+        help="JSON key name for the time property to be plot.", default="cpu_times")
     args = parser.parse_args()
     filenames = glob.glob(args.directory + "/*.json")
     show_plots(filenames, args.times_key)
