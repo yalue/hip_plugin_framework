@@ -2,13 +2,12 @@
 // running HIP code.
 #ifndef PLUGIN_HIP_UTILITIES_H
 #define PLUGIN_HIP_UTILITIES_H
+#include <hip/hip_runtime.h>
+#include "plugin_interface.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include "plugin_interface.h"
-#include <hip/hip_runtime.h>
-
 // This macro takes a hipError_t value and prints the error value and returns 0
 // if the value is not hipSuccess. Returns 1 otherwise.
 #define CheckHIPError(val) (InternalHIPErrorCheck((val), #val, __FILE__, __LINE__))

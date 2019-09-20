@@ -23,7 +23,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
 #include <string.h>
 #include <math.h>
 #include <hip/hip_runtime.h>
@@ -73,28 +72,24 @@ static void CreateMatrix(float *m, int size) {
   }
 }
 
-// Allocates and initializes host and device memory. Returns 0 on error. The
-// original code sets all of vector b to 1.0, all of m to 0, and fills a using
-// the CreateMatrix function--all of this is replicated here.
+// Allocates host and device memory. Returns 0 on error.
 static int AllocateMemory(PluginState *s) {
-  int j;
-  size_t tmp = s->Size * s->Size * sizeof(float);
-  if (!CheckHIPError(hipHostMalloc(&(s->a), tmp))) {
+  size_t size = s->Size * s->Size * sizeof(float);
+
+  // We'll leave initialization of most of this memory until CopyIn, since it
+  // will need to be done before every iteration.
+  if (!CheckHIPError(hipHostMalloc(&(s->a), size))) {
     return 0;
   }
-  CreateMatrix(s->a, s->Size);
   if (!CheckHIPError(hipHostMalloc(&(s->b), s->Size * sizeof(float)))) {
     return 0;
   }
-  for (j = 0; j < s->Size; j++) s->b[j] = 1.0;
   if (!CheckHIPError(hipHostMalloc(&(s->finalVec), s->Size * sizeof(float)))) {
     return 0;
   }
-  memset(s->finalVec, 0, s->Size * sizeof(float));
-  if (!CheckHIPError(hipHostMalloc(&(s->m), tmp))) {
+  if (!CheckHIPError(hipHostMalloc(&(s->m), size))) {
     return 0;
   }
-  memset(s->m, 0, tmp);
   // This benchmark invokes 2 different kernels per iteration in (s->Size - 1)
   // iterations.
   if (!CheckHIPError(hipHostMalloc(&(s->kernel_times), 2 * (s->Size - 1) *
@@ -103,13 +98,13 @@ static int AllocateMemory(PluginState *s) {
   }
   memset(s->kernel_times, 0, 2 * (s->Size - 1) * sizeof(KernelTimes));
 
-  if (!CheckHIPError(hipMalloc(&(s->a_device), tmp))) {
+  if (!CheckHIPError(hipMalloc(&(s->a_device), size))) {
     return 0;
   }
   if (!CheckHIPError(hipMalloc(&(s->b_device), s->Size * sizeof(float)))) {
     return 0;
   }
-  if (!CheckHIPError(hipMalloc(&(s->m_device), tmp))) {
+  if (!CheckHIPError(hipMalloc(&(s->m_device), size))) {
     return 0;
   }
 
@@ -178,6 +173,16 @@ static void* Initialize(InitializationParameters *params) {
 static int CopyIn(void *data) {
   PluginState *s = (PluginState *) data;
   size_t size = s->Size * s->Size * sizeof(float);
+  int j;
+
+  // First, we'll re-initialize memory here so that Execute does the same thing
+  // every time.
+  CreateMatrix(s->a, s->Size);
+  for (j = 0; j < s->Size; j++) s->b[j] = 1.0;
+  memset(s->finalVec, 0, s->Size * sizeof(float));
+  memset(s->m, 0, size);
+
+  // Now copy the clean data to the device.
   if (!CheckHIPError(hipMemcpyAsync(s->m_device, s->m, size,
     hipMemcpyHostToDevice, s->stream))) {
     return 0;
@@ -304,7 +309,7 @@ static int CopyOut(void *data, TimingInformation *times) {
 }
 
 static const char* GetName(void) {
-  return "Rodinia: Gaussian";
+  return "Gaussian (Rodinia)";
 }
 
 int RegisterPlugin(PluginFunctions *functions) {

@@ -2,11 +2,12 @@
 // configuration files used by runner.c.
 #ifndef PARSE_CONFIG_H
 #define PARSE_CONFIG_H
+#include <stdint.h>
+#include "plugin_interface.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <stdint.h>
-#include "plugin_interface.h"
 
 #define USE_DEFAULT_CPU_CORE (-1)
 

@@ -9,4 +9,5 @@ include common.mk
 
 all:
 	cd gaussian && make
+	cd backprop && make
 

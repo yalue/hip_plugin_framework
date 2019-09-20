@@ -723,6 +723,31 @@ static int LoadPluginLibrary(PluginState *plugin) {
   return 1;
 }
 
+// Does a one or more non-recorded "Warm-up" iterations of a plugin. Returns 0
+// on error. Does not call the cleanup function--the caller must do that if
+// this returns 0.
+static int DoWarmup(PluginState *state, void *user_data) {
+  TimingInformation junk;
+  static const int warmup_iterations = 4;
+  const char *name = state->functions.get_name();
+  int i;
+  for (i = 0; i < warmup_iterations; i++) {
+    if (!state->functions.copy_in(user_data)) {
+      printf("Plugin %s copy in failed (warm-up).\n", name);
+      return 0;
+    }
+    if (!state->functions.execute(user_data)) {
+      printf("Plugin %s execute failed (warm-up).\n", name);
+      return 0;
+    }
+    if (!state->functions.copy_out(user_data, &junk)) {
+      printf("Plugin %s copy out failed (warm-up).\n", name);
+      return 0;
+    }
+  }
+  return 1;
+}
+
 // Runs a single plugin instance. This is usually called from a separate thread
 // or process. Its argument must be a pointer to a PluginState struct. It may
 // print a message and return NULL on error. On success, it will return an
@@ -765,20 +790,9 @@ static void* RunPlugin(void *data) {
     printf("Failed writing the output file header for %s.\n", name);
     return NULL;
   }
-  // Do the warmup iteration if required.
+  // Do the warmup iteration(s) if required.
   if (state->shared_state->global_config->do_warmup) {
-    if (!state->functions.copy_in(user_data)) {
-      printf("Plugin %s copy in failed (warm-up).\n", name);
-      state->functions.cleanup(user_data);
-      return NULL;
-    }
-    if (!state->functions.execute(user_data)) {
-      printf("Plugin %s execute failed (warm-up).\n", name);
-      state->functions.cleanup(user_data);
-      return NULL;
-    }
-    if (!state->functions.copy_out(user_data, &timing_info)) {
-      printf("Plugin %s copy out failed (warm-up).\n", name);
+    if (!DoWarmup(state, user_data)) {
       state->functions.cleanup(user_data);
       return NULL;
     }
@@ -994,6 +1008,9 @@ int main(int argc, char **argv) {
     Cleanup(shared_state);
     return 1;
   }
+  printf("Running on device %d: %s\n",
+    shared_state->global_config->gpu_device_id,
+    shared_state->device_info.device_name);
   shared_state->starting_seconds = CurrentSeconds();
   if (shared_state->global_config->use_processes) {
     result = RunAsProcesses(shared_state);
