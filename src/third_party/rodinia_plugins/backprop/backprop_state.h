@@ -14,6 +14,8 @@ struct PluginState {
   hipStream_t stream;
   int stream_created;
   KernelTimes kernel_times[2];
+  uint64_t *device_block_times[2];
+  uint64_t *host_block_times[2];
   struct drand48_data rng;
   int layer_size;
   unsigned int num_blocks;

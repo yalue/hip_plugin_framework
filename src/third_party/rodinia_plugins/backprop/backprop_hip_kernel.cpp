@@ -3,7 +3,12 @@
 
 __global__ void bpnn_layerforward_CUDA(float *input_cuda,
     float *output_hidden_cuda, float *input_hidden_cuda,
-    float *hidden_partial_sum, int in, int hid) {
+    float *hidden_partial_sum, int in, int hid, uint64_t *block_times) {
+  uint64_t start_time = clock64();
+  int block_index = blockIdx.y * gridDim.x + blockIdx.x;
+  if (start_time < block_times[block_index * 2]) {
+    block_times[block_index * 2] = start_time;
+  }
   int by = blockIdx.y;
   int tx = threadIdx.x;
   int ty = threadIdx.y;
@@ -32,10 +37,16 @@ __global__ void bpnn_layerforward_CUDA(float *input_cuda,
   if (tx == 0) {
     hidden_partial_sum[by * hid + ty] = weight_matrix[tx][ty];
   }
+  block_times[block_index * 2 + 1] = clock64();
 }
 
 __global__ void bpnn_adjust_weights_cuda(float *delta, int hid, float *ly,
-    int in, float *w, float *oldw) {
+    int in, float *w, float *oldw, uint64_t *block_times) {
+  uint64_t start_time = clock64();
+  int block_index = blockIdx.y * gridDim.x + blockIdx.x;
+  if (start_time < block_times[block_index * 2]) {
+    block_times[block_index * 2] = start_time;
+  }
   int by = blockIdx.y;
   int tx = threadIdx.x;
   int ty = threadIdx.y;
@@ -50,6 +61,7 @@ __global__ void bpnn_adjust_weights_cuda(float *delta, int hid, float *ly,
     w[index_x] += (ETA * delta[index_x]) + (MOMENTUM * oldw[index_x]);
     oldw[index_x] = (ETA * delta[index_x]) + (MOMENTUM * oldw[index_x]);
   }
+  block_times[block_index * 2 + 1] = clock64();
 }
 
 #endif  // BACKPROP_HIP_KERNEL_H

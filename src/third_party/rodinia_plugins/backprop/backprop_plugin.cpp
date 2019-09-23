@@ -62,7 +62,9 @@ static int AllocateFloatsDev(float **ptr, int n) {
 // Allocates and initializes memory used by the plugin.
 static int AllocateMemory(PluginState *s) {
   BPNN *net = NULL;
-  int in, hid, out;
+  uint64_t *tmp = NULL;
+  int in, hid, out, i;
+  size_t block_times_size;
   net = BPNNCreate(s->layer_size, 16, 1);
   if (!net) return 0;
   s->net = net;
@@ -92,11 +94,23 @@ static int AllocateMemory(PluginState *s) {
   if (!AllocateFloatsDev(&s->input_prev_weights_cuda, (in + 1) * (hid + 1))) {
     return 0;
   }
+  // Both kernels use the same number of blocks--allocate space for the block
+  // start and end times on the host and device.
+  block_times_size = 2 * s->num_blocks * sizeof(uint64_t);
+  for (i = 0; i < 2; i++) {
+    if (!CheckHIPError(hipMalloc(&tmp, block_times_size))) return 0;
+    s->device_block_times[i] = tmp;
+    tmp = NULL;
+    if (!CheckHIPError(hipHostMalloc(&tmp, block_times_size))) return 0;
+    s->host_block_times[i] = tmp;
+    tmp = NULL;
+  }
   return 1;
 }
 
 static void Cleanup(void *data) {
   PluginState *s = (PluginState *) data;
+  int i;
   if (s->net) BPNNFree(s->net);
   hipFree(s->input_cuda);
   hipFree(s->output_hidden_cuda);
@@ -107,6 +121,10 @@ static void Cleanup(void *data) {
   hipHostFree(s->input_weights_one_dim);
   hipHostFree(s->input_weights_prev_one_dim);
   hipHostFree(s->partial_sum);
+  for (i = 0; i < 2; i++) {
+    hipFree(s->device_block_times[i]);
+    hipHostFree(s->host_block_times[i]);
+  }
   if (s->stream_created) {
     CheckHIPError(hipStreamDestroy(s->stream));
   }
@@ -144,9 +162,11 @@ static void* Initialize(InitializationParameters *params) {
   s->kernel_times[0].kernel_name = "bpnn_layerforward_CUDA";
   s->kernel_times[0].thread_count = 16 * 16;
   s->kernel_times[0].block_count = s->num_blocks;
+  s->kernel_times[0].block_times = s->host_block_times[0];
   s->kernel_times[1].kernel_name = "bpnn_adjust_weights_cuda";
-  s->kernel_times[0].thread_count = 16 * 16;
-  s->kernel_times[0].block_count = s->num_blocks;
+  s->kernel_times[1].thread_count = 16 * 16;
+  s->kernel_times[1].block_count = s->num_blocks;
+  s->kernel_times[1].block_times = s->host_block_times[1];
 
   if (!CheckHIPError(CreateHIPStreamWithMask(&(s->stream),
     params->compute_unit_mask, COMPUTE_UNIT_MASK_ENTRIES))) {
@@ -159,7 +179,7 @@ static void* Initialize(InitializationParameters *params) {
 }
 
 static int CopyIn(void *data) {
-  int j, k, m, in, hid, out;
+  int i, j, k, m, in, hid, out;
   PluginState *s = (PluginState *) data;
   BPNN *net = s->net;
   in = net->input_n;
@@ -179,6 +199,13 @@ static int CopyIn(void *data) {
   }
 
   // Now we can start copying.
+  for (i = 0; i < 2; i++) {
+    // Reset the block times to the maximum uint64_t values.
+    if (!CheckHIPError(hipMemsetAsync(s->device_block_times[i], 0xff,
+      2 * s->num_blocks * sizeof(uint64_t), s->stream))) {
+      return 0;
+    }
+  }
   if (!CheckHIPError(hipMemcpyAsync(s->input_cuda, net->input_units, (in + 1) *
     sizeof(float), hipMemcpyHostToDevice, s->stream))) {
     return 0;
@@ -207,7 +234,8 @@ static int Execute(void *data) {
   s->kernel_times[0].kernel_launch_times[0] = CurrentSeconds();
   hipLaunchKernelGGL(bpnn_layerforward_CUDA, dim3(1, s->num_blocks),
     dim3(16, 16), 0, s->stream, s->input_cuda, s->output_hidden_cuda,
-    s->input_hidden_cuda, s->hidden_partial_sum, in, hid);
+    s->input_hidden_cuda, s->hidden_partial_sum, in, hid,
+    s->device_block_times[0]);
   s->kernel_times[0].kernel_launch_times[1] = CurrentSeconds();
   if (!CheckHIPError(hipStreamSynchronize(s->stream))) return 0;
   s->kernel_times[0].kernel_launch_times[2] = CurrentSeconds();
@@ -251,7 +279,8 @@ static int Execute(void *data) {
   s->kernel_times[1].kernel_launch_times[0] = CurrentSeconds();
   hipLaunchKernelGGL(bpnn_adjust_weights_cuda, dim3(1, s->num_blocks),
     dim3(16, 16), 0, s->stream, s->hidden_delta_cuda, hid, s->input_cuda, in,
-    s->input_hidden_cuda, s->input_prev_weights_cuda);
+    s->input_hidden_cuda, s->input_prev_weights_cuda,
+    s->device_block_times[1]);
   s->kernel_times[1].kernel_launch_times[1] = CurrentSeconds();
   if (!CheckHIPError(hipStreamSynchronize(s->stream))) return 0;
   s->kernel_times[1].kernel_launch_times[2] = CurrentSeconds();
@@ -261,10 +290,11 @@ static int Execute(void *data) {
 
 static int CopyOut(void *data, TimingInformation *times) {
   PluginState *s = (PluginState *) data;
-  int in, hid;
+  int in, hid, i;
   BPNN *net = s->net;
   in = net->input_n;
   hid = net->hidden_n;
+  // Copy resulting data from the GPU.
   if (!CheckHIPError(hipMemcpyAsync(net->input_units, s->input_cuda, (in + 1) *
     sizeof(float), hipMemcpyDeviceToHost, s->stream))) {
     return 0;
@@ -274,7 +304,17 @@ static int CopyOut(void *data, TimingInformation *times) {
     hipMemcpyDeviceToHost, s->stream))) {
     return 0;
   }
+  // Copy block times from the GPU (remember that kernel_times already has a
+  // copy of the pointer to this data).
+  for (i = 0; i < 2; i++) {
+    if (!CheckHIPError(hipMemcpyAsync(s->host_block_times[i],
+      s->device_block_times[i], 2 * s->num_blocks * sizeof(uint64_t),
+      hipMemcpyDeviceToHost, s->stream))) {
+      return 0;
+    }
+  }
   if (!CheckHIPError(hipStreamSynchronize(s->stream))) return 0;
+  // Provide the timing data to the caller.
   times->kernel_count = 2;
   times->kernel_times = s->kernel_times;
   times->resulting_data_size = 0;
