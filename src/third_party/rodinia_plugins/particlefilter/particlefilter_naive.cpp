@@ -19,10 +19,12 @@
 #define BLOCK_Y 16
 
 // The following values are taken from Rodinia's original "run" file.
-#define DEFAULT_NPARTICLES (1000)
 #define DEFAULT_SIZE_X (128)
 #define DEFAULT_SIZE_Y (128)
 #define DEFAULT_FRAME_COUNT (10)
+
+// I increased this by a factor of 10 from the original benchmark's "run" file.
+#define DEFAULT_NPARTICLES (10000)
 
 // The following values were just constants in the original code.
 const int DISK_RADIUS = 5;
@@ -33,6 +35,7 @@ typedef struct {
   hipStream_t stream;
   int stream_created;
   KernelTimes *kernel_times;
+  int block_count;
   // We'll use drand48_r rather than the roll-your-own rng used in the original
   struct drand48_data rng;
   // Parameters and memory used by the original program are below:
@@ -63,9 +66,13 @@ typedef struct {
   int *ind;
   double *u;
   double *u_GPU;
+
+  // Holds block start and end times for the last kernel invocation.
+  uint64_t *device_block_times;
 } PluginState;
 
 static void Cleanup(void *data) {
+  int i;
   PluginState *s = (PluginState *) data;
   free(s->I);
   free(s->tmp_dilate);
@@ -74,7 +81,13 @@ static void Cleanup(void *data) {
   free(s->ind);
   free(s->weights);
   free(s->likelihood);
+  if (s->kernel_times) {
+    for (i = 0; i < (s->Nfr - 1); i++) {
+      hipHostFree(s->kernel_times[i].block_times);
+    }
+  }
   free(s->kernel_times);
+  hipFree(s->device_block_times);
   hipHostFree(s->arrayX);
   hipHostFree(s->arrayY);
   hipHostFree(s->xj);
@@ -113,7 +126,8 @@ static void strelDisk(int *disk, int radius) {
 
 // Allocates all memory used by the plugin. Returns 0 on error.
 static int AllocateMemory(PluginState *s) {
-  int x, y;
+  int x, y, i;
+  uint64_t *tmp = NULL;
   size_t size = s->IszX * s->IszY * s->Nfr * sizeof(int);
   s->I = (int *) malloc(size);
   if (!s->I) {
@@ -158,6 +172,19 @@ static int AllocateMemory(PluginState *s) {
     return 0;
   }
   memset(s->kernel_times, 0, (s->Nfr - 1) * sizeof(KernelTimes));
+  for (i = 0; i < (s->Nfr - 1); i++) {
+    // Allocate enough space for start and end times of every block.
+    tmp = NULL;
+    if (!CheckHIPError(hipHostMalloc(&tmp, 2 * s->block_count *
+      sizeof(uint64_t)))) {
+      return 0;
+    }
+    s->kernel_times[i].block_times = tmp;
+  }
+  if (!CheckHIPError(hipMalloc(&s->device_block_times, 2 * s->block_count *
+    sizeof(uint64_t)))) {
+    return 0;
+  }
 
   size = s->Nparticles * sizeof(double);
   s->weights = (double *) malloc(size);
@@ -195,16 +222,21 @@ static void* Initialize(InitializationParameters *params) {
   }
   if (!CheckHIPError(hipHostMalloc(&s, sizeof(*s)))) return NULL;
   memset(s, 0, sizeof(*s));
+  random_seed = ((int) (CurrentSeconds() * 1e7) & 0x7fffffff);
+  srand48_r(random_seed, &(s->rng));
+
+  // All of this stuff needs to be set before AllocateMemory.
   s->Nparticles = DEFAULT_NPARTICLES;
   s->IszX = DEFAULT_SIZE_X;
   s->IszY = DEFAULT_SIZE_Y;
   s->Nfr = DEFAULT_FRAME_COUNT;
-  random_seed = ((int) (CurrentSeconds() * 1e7) & 0x7fffffff);
-  srand48_r(random_seed, &(s->rng));
+  s->block_count = s->Nparticles / THREADS_PER_BLOCK;
+  if ((s->Nparticles % THREADS_PER_BLOCK) != 0) s->block_count++;
   if (!AllocateMemory(s)) {
     Cleanup(s);
     return NULL;
   }
+
   if (!CheckHIPError(CreateHIPStreamWithMask(&(s->stream),
     params->compute_unit_mask, COMPUTE_UNIT_MASK_ENTRIES))) {
     Cleanup(s);
@@ -214,10 +246,7 @@ static void* Initialize(InitializationParameters *params) {
   for (i = 0; i < (s->Nfr - 1); i++) {
     s->kernel_times[i].kernel_name = "ParticleFilter kernel";
     s->kernel_times[i].thread_count = THREADS_PER_BLOCK;
-    s->kernel_times[i].block_count = s->Nparticles / THREADS_PER_BLOCK;
-    if ((s->Nparticles % THREADS_PER_BLOCK) != 0) {
-      s->kernel_times[i].block_count++;
-    }
+    s->kernel_times[i].block_count = s->block_count;
   }
   return s;
 }
@@ -462,7 +491,12 @@ __device__ int findIndexBin(double *CDF, int beginIndex, int endIndex,
 * param7: Nparticles
 *****************************/
 __global__ void kernel(double *arrayX, double *arrayY, double *CDF, double *u,
-                       double *xj, double *yj, int Nparticles) {
+                       double *xj, double *yj, int Nparticles,
+                       uint64_t *block_times) {
+  uint64_t start_clock = clock64();
+  if (threadIdx.x == 0) {
+    block_times[blockIdx.x * 2] = start_clock;
+  }
   int block_id = blockIdx.x;  // + gridDim.x * blockIdx.y;
   int i = blockDim.x * block_id + threadIdx.x;
 
@@ -483,6 +517,7 @@ __global__ void kernel(double *arrayX, double *arrayY, double *CDF, double *u,
     xj[i] = arrayX[index];
     yj[i] = arrayY[index];
   }
+  block_times[blockIdx.x * 2 + 1] = clock64();
 }
 
 /**
@@ -706,15 +741,11 @@ static int particleFilter(PluginState *s) {
     }
     if (!CheckHIPError(hipStreamSynchronize(s->stream))) return 0;
 
-    // Set number of threads
-    int num_blocks = Nparticles / THREADS_PER_BLOCK;
-    if ((Nparticles % THREADS_PER_BLOCK) != 0) num_blocks++;
-
     // KERNEL FUNCTION CALL
     s->kernel_times[k - 1].kernel_launch_times[0] = CurrentSeconds();
-    hipLaunchKernelGGL((kernel), dim3(num_blocks), dim3(THREADS_PER_BLOCK), 0,
-                       0, arrayX_GPU, arrayY_GPU, CDF_GPU, u_GPU, xj_GPU,
-                       yj_GPU, Nparticles);
+    hipLaunchKernelGGL((kernel), dim3(s->block_count), dim3(THREADS_PER_BLOCK),
+      0, 0, arrayX_GPU, arrayY_GPU, CDF_GPU, u_GPU, xj_GPU, yj_GPU, Nparticles,
+      s->device_block_times);
     s->kernel_times[k - 1].kernel_launch_times[1] = CurrentSeconds();
     if (!CheckHIPError(hipStreamSynchronize(s->stream))) return 0;
     s->kernel_times[k - 1].kernel_launch_times[2] = CurrentSeconds();
@@ -725,6 +756,11 @@ static int particleFilter(PluginState *s) {
       return 0;
     }
     if (!CheckHIPError(hipMemcpyAsync(xj, xj_GPU, copy_size,
+      hipMemcpyDeviceToHost, s->stream))) {
+      return 0;
+    }
+    if (!CheckHIPError(hipMemcpyAsync(s->kernel_times[k - 1].block_times,
+      s->device_block_times, 2 * s->block_count * sizeof(uint64_t),
       hipMemcpyDeviceToHost, s->stream))) {
       return 0;
     }

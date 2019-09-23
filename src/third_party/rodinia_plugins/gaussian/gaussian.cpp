@@ -50,6 +50,11 @@ typedef struct {
   // Avoid reallocating and freeing device memory by tracking it here, another
   // change from the original benchmark.
   float *m_device, *a_device, *b_device;
+  // These fields are used for tracking block times.
+  int block_count;
+  int block_count_2d;
+  int larger_block_count;
+  uint64_t *device_block_times;
 } PluginState;
 
 // create both matrix and right hand side, Ke Wang 2013/08/12 11:51:06
@@ -74,8 +79,9 @@ static void CreateMatrix(float *m, int size) {
 
 // Allocates host and device memory. Returns 0 on error.
 static int AllocateMemory(PluginState *s) {
+  int i;
   size_t size = s->Size * s->Size * sizeof(float);
-
+  uint64_t *tmp = NULL;
   // We'll leave initialization of most of this memory until CopyIn, since it
   // will need to be done before every iteration.
   if (!CheckHIPError(hipHostMalloc(&(s->a), size))) {
@@ -97,6 +103,31 @@ static int AllocateMemory(PluginState *s) {
     return 0;
   }
   memset(s->kernel_times, 0, 2 * (s->Size - 1) * sizeof(KernelTimes));
+  // Even-numbered kernels have block_count blocks, odd-numbered kernels have
+  // block_count_2d blocks. Allocate space to hold block start and end times
+  // for each.
+  for (i = 0; i < (2 * s->Size - 1); i++) {
+    tmp = NULL;
+    if (!CheckHIPError(hipHostMalloc(&tmp, 2 * s->block_count *
+      sizeof(uint64_t)))) {
+      return 0;
+    }
+    s->kernel_times[i * 2].block_times = tmp;
+    tmp = NULL;
+    if (!CheckHIPError(hipHostMalloc(&tmp, 2 * s->block_count_2d *
+      sizeof(uint64_t)))) {
+      return 0;
+    }
+    s->kernel_times[i * 2 + 1].block_times = tmp;
+  }
+
+  // Allocate a single buffer to be used for start and end block times for both
+  // kernels--just make sure it has enough space for whichever has more blocks.
+  if (!CheckHIPError(hipMalloc(&s->device_block_times,
+    2 * s->larger_block_count * sizeof(uint64_t)))) {
+    return 0;
+  }
+
 
   if (!CheckHIPError(hipMalloc(&(s->a_device), size))) {
     return 0;
@@ -113,14 +144,21 @@ static int AllocateMemory(PluginState *s) {
 
 static void Cleanup(void *data) {
   PluginState *s = (PluginState *) data;
-  if (s->m) hipHostFree(s->m);
-  if (s->a) hipHostFree(s->a);
-  if (s->b) hipHostFree(s->b);
-  if (s->finalVec) hipHostFree(s->finalVec);
-  if (s->kernel_times) hipHostFree(s->kernel_times);
-  if (s->m_device) hipFree(s->m_device);
-  if (s->a_device) hipFree(s->a_device);
-  if (s->b_device) hipFree(s->b_device);
+  int i;
+  hipHostFree(s->m);
+  hipHostFree(s->a);
+  hipHostFree(s->b);
+  hipHostFree(s->finalVec);
+  if (s->kernel_times) {
+    for (i = 0; i < ((s->Size - 1) * 2); i++) {
+      hipHostFree(s->kernel_times[i].block_times);
+    }
+    hipHostFree(s->kernel_times);
+  }
+  hipFree(s->m_device);
+  hipFree(s->a_device);
+  hipFree(s->b_device);
+  hipFree(s->device_block_times);
   if (s->stream_created) {
     CheckHIPError(hipStreamDestroy(s->stream));
   }
@@ -130,7 +168,7 @@ static void Cleanup(void *data) {
 
 static void* Initialize(InitializationParameters *params) {
   PluginState *s = NULL;
-  int block_count, block_count_2d, i;
+  int i;
   if (!CheckHIPError(hipSetDevice(params->device_id))) {
     return NULL;
   }
@@ -140,7 +178,21 @@ static void* Initialize(InitializationParameters *params) {
     return NULL;
   }
   memset(s, 0, sizeof(*s));
+
+  // The following stuff needs to be set before calling AllocateMemory.
   s->Size = MATRIX_SIZE;
+  s->block_count = s->Size / MAXBLOCKSIZE;
+  if ((s->Size % MAXBLOCKSIZE) != 0) s->block_count++;
+  s->block_count_2d = s->Size / BLOCK_SIZE_XY;
+  if ((s->Size % BLOCK_SIZE_XY) != 0) s->block_count_2d++;
+  // Fan2's uses a 2D grid of blocks and threads.
+  s->block_count_2d *= s->block_count_2d;
+  if (s->block_count > s->block_count_2d) {
+    s->larger_block_count = s->block_count;
+  } else {
+    s->larger_block_count = s->block_count_2d;
+  }
+
   if (!AllocateMemory(s)) {
     Cleanup(s);
     return NULL;
@@ -151,21 +203,15 @@ static void* Initialize(InitializationParameters *params) {
     return NULL;
   }
   s->stream_created = 1;
-  block_count = s->Size / MAXBLOCKSIZE;
-  if ((s->Size % MAXBLOCKSIZE) != 0) block_count++;
-  block_count_2d = s->Size / BLOCK_SIZE_XY;
-  if ((s->Size % BLOCK_SIZE_XY) != 0) block_count_2d++;
-  // Fan2's uses a 2D grid of blocks and threads.
-  block_count_2d *= block_count_2d;
   // Pre-fill in the information about each kernel, there's no need to copy all
   // the same stuff every iteration.
   for (i = 0; i < (s->Size - 1); i++) {
     s->kernel_times[i * 2].kernel_name = "Fan1";
     s->kernel_times[i * 2].thread_count = MAXBLOCKSIZE;
-    s->kernel_times[i * 2].block_count = block_count;
+    s->kernel_times[i * 2].block_count = s->block_count;
     s->kernel_times[i * 2 + 1].kernel_name = "Fan2";
     s->kernel_times[i * 2 + 1].thread_count = BLOCK_SIZE_XY * BLOCK_SIZE_XY;
-    s->kernel_times[i * 2 + 1].block_count = block_count_2d;
+    s->kernel_times[i * 2 + 1].block_count = s->block_count_2d;
   }
   return s;
 }
@@ -196,6 +242,10 @@ static int CopyIn(void *data) {
     hipMemcpyHostToDevice, s->stream))) {
     return 0;
   }
+  if (!CheckHIPError(hipMemsetAsync(s->device_block_times, 0xff,
+    2 * s->larger_block_count * sizeof(uint64_t), s->stream))) {
+    return 0;
+  }
   if (!CheckHIPError(hipStreamSynchronize(s->stream))) return 0;
   return 1;
 }
@@ -208,11 +258,23 @@ static int CopyIn(void *data) {
  ** of t which is defined on the ForwardSub().
  **-------------------------------------------------------
  */
-__global__ void Fan1(float *m_cuda, float *a_cuda, int Size, int t) {
-  if ((blockIdx.x * blockDim.x + threadIdx.x) >= (Size - 1 - t)) return;
+__global__ void Fan1(float *m_cuda, float *a_cuda, int Size, int t,
+  uint64_t *block_times) {
+  uint64_t start_time = clock64();
+  // Since our blocks are so short for this benchmark, we use this more
+  // "sophisticated" algorithm for recording the block start times.
+  // It requires setting block_times to max values before invoking the kernel.
+  if (block_times[2 * blockIdx.x] > start_time) {
+    block_times[2 * blockIdx.x] = start_time;
+  }
+  if ((blockIdx.x * blockDim.x + threadIdx.x) >= (Size - 1 - t)) {
+    block_times[blockIdx.x * 2 + 1] = clock64();
+    return;
+  }
   *(m_cuda + Size * (blockDim.x * blockIdx.x + threadIdx.x + t + 1) + t) =
     *(a_cuda + Size * (blockDim.x * blockIdx.x + threadIdx.x + t + 1) + t) /
     *(a_cuda + Size * t + t);
+  block_times[blockIdx.x * 2 + 1] = clock64();
 }
 
 /*-------------------------------------------------------
@@ -220,9 +282,22 @@ __global__ void Fan1(float *m_cuda, float *a_cuda, int Size, int t) {
  **-------------------------------------------------------
  */
 __global__ void Fan2(float *m_cuda, float *a_cuda, float *b_cuda,int Size,
-  int j1, int t) {
-  if ((blockIdx.x * blockDim.x + threadIdx.x) >= (Size - 1 - t)) return;
-  if ((blockIdx.y * blockDim.y + threadIdx.y) >= (Size - t)) return;
+  int j1, int t, uint64_t *block_times) {
+  uint64_t start_time = clock64();
+  int block_index = blockIdx.y * gridDim.x + blockIdx.x;
+  // Just like Fan1, do the same thing here for the earliest possible start
+  // time.
+  if (block_times[2 * block_index] > start_time) {
+    block_times[2 * block_index] = start_time;
+  }
+  if ((blockIdx.x * blockDim.x + threadIdx.x) >= (Size - 1 - t)) {
+    block_times[2 * block_index + 1] = clock64();
+    return;
+  }
+  if ((blockIdx.y * blockDim.y + threadIdx.y) >= (Size - t)) {
+    block_times[2 * block_index + 1] = clock64();
+    return;
+  }
   int xidx = blockIdx.x * blockDim.x + threadIdx.x;
   int yidx = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -232,6 +307,7 @@ __global__ void Fan2(float *m_cuda, float *a_cuda, float *b_cuda,int Size,
     b_cuda[xidx + 1 + t] -= m_cuda[Size * (xidx + 1 + t) + (yidx + t)] *
       b_cuda[t];
   }
+  block_times[2 * block_index + 1] = clock64();
 }
 
 static int Execute(void *data) {
@@ -246,18 +322,44 @@ static int Execute(void *data) {
     // Run the first kernel, surrounded by a bunch of timing bookkeeping.
     s->kernel_times[t * 2].kernel_launch_times[0] = CurrentSeconds();
     hipLaunchKernelGGL(Fan1, dim3(grid_size), dim3(block_size), 0, s->stream,
-      s->m_device, s->a_device, s->Size, t);
+      s->m_device, s->a_device, s->Size, t, s->device_block_times);
     s->kernel_times[t * 2].kernel_launch_times[1] = CurrentSeconds();
     if (!CheckHIPError(hipStreamSynchronize(s->stream))) return 0;
     s->kernel_times[t * 2].kernel_launch_times[2] = CurrentSeconds();
+    if (!CheckHIPError(hipMemcpyAsync(s->kernel_times[t * 2].block_times,
+      s->device_block_times, 2 * s->block_count * sizeof(uint64_t),
+      hipMemcpyDeviceToHost, s->stream))) {
+      return 0;
+    }
+    if (!CheckHIPError(hipStreamSynchronize(s->stream))) return 0;
+    // Reset the block times, needed for our start-time-recording algorithm.
+    if (!CheckHIPError(hipMemsetAsync(s->device_block_times, 0xff,
+      2 * s->larger_block_count * sizeof(uint64_t), s->stream))) {
+      return 0;
+    }
+    if (!CheckHIPError(hipStreamSynchronize(s->stream))) return 0;
+
     // Now run the second kernel.
     s->kernel_times[t * 2 + 1].kernel_launch_times[0] = CurrentSeconds();
     hipLaunchKernelGGL(Fan2, dim3(grid_size_2d, grid_size_2d),
       dim3(block_size_2d, block_size_2d), 0, s->stream, s->m_device,
-      s->a_device, s->b_device, s->Size, s->Size - t, t);
+      s->a_device, s->b_device, s->Size, s->Size - t, t,
+      s->device_block_times);
     s->kernel_times[t * 2 + 1].kernel_launch_times[1] = CurrentSeconds();
     if (!CheckHIPError(hipStreamSynchronize(s->stream))) return 0;
     s->kernel_times[t * 2 + 1].kernel_launch_times[2] = CurrentSeconds();
+    if (!CheckHIPError(hipMemcpyAsync(s->kernel_times[t * 2 + 1].block_times,
+      s->device_block_times, 2 * s->block_count_2d * sizeof(uint64_t),
+      hipMemcpyDeviceToHost, s->stream))) {
+      return 0;
+    }
+    if (!CheckHIPError(hipStreamSynchronize(s->stream))) return 0;
+    // Reset the block times, needed for our start-time-recording algorithm.
+    if (!CheckHIPError(hipMemsetAsync(s->device_block_times, 0xff,
+      2 * s->larger_block_count * sizeof(uint64_t), s->stream))) {
+      return 0;
+    }
+    if (!CheckHIPError(hipStreamSynchronize(s->stream))) return 0;
   }
   return 1;
 }
