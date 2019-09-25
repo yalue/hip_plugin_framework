@@ -1,6 +1,6 @@
 include common.mk
 
-.PHONY: all gaussian backprop particlefilter
+.PHONY: all gaussian backprop particlefilter dwt2d
 
 # This makefile assumes that plugin_utilities.o and plugin_hip_utilities.o
 # already exist and are already at the correct location. This will be the case
@@ -11,7 +11,7 @@ include common.mk
 # always descend into these directories and run make--this allows them to be
 # built in parallel, and the makefiles in each individual benchmark's directory
 # are responsible for "checking" whether they need to be rebuilt.
-all: gaussian backprop particlefilter
+all: gaussian backprop particlefilter dwt2d
 
 gaussian:
 	cd gaussian && make
@@ -21,4 +21,7 @@ backprop:
 
 particlefilter:
 	cd particlefilter && make
+
+dwt2d:
+	cd dwt2d && make
 

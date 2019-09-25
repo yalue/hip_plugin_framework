@@ -22,8 +22,9 @@ def generate_config(active_cu_count, total_cu_count):
         "name": "Compute Unit Count vs. Performance",
         "max_iterations": 100,
         "max_time": 0,
-        "gpu_device_id": 0,
+        "gpu_device_id": 1,
         "pin_cpus": True,
+        "do_warmup": True,
         "plugins": [plugin_config]
     }
     return json.dumps(overall_config)

@@ -103,7 +103,6 @@ static void Cleanup(void *data) {
   if (s->stream_created) {
     CheckHIPError(hipStreamDestroy(s->stream));
   }
-  memset(s, 0, sizeof(*s));
   hipHostFree(s);
 }
 

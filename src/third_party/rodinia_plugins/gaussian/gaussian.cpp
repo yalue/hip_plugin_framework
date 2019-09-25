@@ -128,7 +128,6 @@ static int AllocateMemory(PluginState *s) {
     return 0;
   }
 
-
   if (!CheckHIPError(hipMalloc(&(s->a_device), size))) {
     return 0;
   }
@@ -162,7 +161,6 @@ static void Cleanup(void *data) {
   if (s->stream_created) {
     CheckHIPError(hipStreamDestroy(s->stream));
   }
-  memset(s, 0, sizeof(*s));
   free(s);
 }
 

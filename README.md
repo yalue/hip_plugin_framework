@@ -95,11 +95,14 @@ The layout of each configuration file is as follows:
       first iteration) before beginning execution.>,
       "cpu_core": <Number. Optional. If specified, and pin_cpus is false, the
         system will attempt to pin this plugin onto the given CPU core.>
-      "compute_unit_mask": <An array of booleans. Optional. If specified, the
-        framework will attempt to configure the plugin to only use the compute
-        units corresponding to values of true in the array. If the array
-        contains fewer entries than the number of compute units, the remaining
-        compute units will be enabled.>
+      "compute_unit_mask": <Optional. Can be an array of booleans, or a string
+        of binary digits, or a hexadecimal string starting with "0x". This will
+        be used by the framework to attempt to configure the CUs on which the
+        plugin's kernels are allowed to run. If the value is a string, it is
+        interpreted as a list of bits, where if bit i is 1, then execution is
+        allowed on CU i. If the value is an array of booleans execution is
+        allowed on CU i if entry i is true. If this is not provided or too
+        short, then unspecified values default to being enabled.>
     },
     {
       <more plugin instances can be listed here>

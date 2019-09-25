@@ -1,0 +1,17 @@
+{
+  "name": "Rodinia DWT2D Benchmark Test",
+  "max_iterations": 100,
+  "max_time": 0,
+  "gpu_device_id": 1,
+  "use_processes": false,
+  "do_warmup": true,
+  "plugins": [
+    {
+      "comment": "The dwt benchmark ignores thread and block count settings.",
+      "filename": "./bin/dwt2d.so",
+      "log_name": "results/dwt2d_test.json",
+      "thread_count": 0,
+      "block_count": 0
+    }
+  ]
+}

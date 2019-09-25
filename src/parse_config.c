@@ -99,6 +99,7 @@ static int IsCJSONBoolean(cJSON *o) {
 // config doesn't specify a compute unit mask for this plugin, this will simply
 // set all bits in mask_values to 1.
 static int ParseComputeUnitMask(cJSON *plugin_config, uint64_t *mask_values) {
+  // TODO (next): Implement binary and hex string CU mask configs.
   cJSON *list = cJSON_GetObjectItem(plugin_config, "compute_unit_mask");
   cJSON *array_entry = NULL;
   memset(mask_values, 0xff, COMPUTE_UNIT_MASK_ENTRIES * sizeof(uint64_t));

@@ -43,10 +43,11 @@ def generate_config(cu_count, competitor_cu_count, overlap_amount, total_cus):
         "name": "Compute Unit Overlap vs. Performance",
         "max_iterations": 100,
         "max_time": 0,
-        "gpu_device_id": 0,
+        "gpu_device_id": 1,
         "pin_cpus": True,
         "sync_every_iteration": True,
         "use_processes": True,
+        "do_warmup": True,
         "plugins": [task_config, competitor_config]
     }
     return json.dumps(overall_config)
