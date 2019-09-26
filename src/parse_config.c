@@ -92,6 +92,89 @@ static int IsCJSONBoolean(cJSON *o) {
   return (o->type == cJSON_True) || (o->type == cJSON_False);
 }
 
+// Converts the hexadecimal character c to its 4-bit numerical equivalent. Case
+// insensitive. Returns a value over 0xf if the provided character isn't a
+// valid hex value.
+static uint64_t HexTo64(char c) {
+  if (c < '0') return 100;
+  if (c <= '9') return c - '0';
+  if (c < 'A') return 100;
+  if (c <= 'F') return 10 + (c - 'A');
+  if (c < 'a') return 100;
+  if (c <= 'f') return 10 + (c - 'a');
+  return 100;
+}
+
+// Takes a hexadecimal string and interprets it as a set of bits corresponding
+// to a compute unit mask. Returns 0 on error.
+static int ParseComputeUnitMaskHex(const char *s, uint64_t *mask_values) {
+  uint64_t tmp;
+  int length, i;
+  length = strlen(s);
+  // Each character specifies 4 bits, and each 64-bit "entry" here holds 64
+  // bits.
+  if ((length * 4) > (COMPUTE_UNIT_MASK_ENTRIES * 64)) {
+    printf("%s is too long to be a hexadecimal compute unit mask.\n", s);
+    return 0;
+  }
+  // Read the string in reverse order so we can start filling in the lower bits
+  // of the mask first.
+  for (i = length - 1; i >= 0; i--) {
+    tmp = HexTo64(s[i]);
+    if (tmp > 0xf) {
+      printf("Compute unit mask %s contains invalid hexadecimal characters.\n",
+        s);
+      return 0;
+    }
+    // Remember that the mask values default to all being set, so we'll need to
+    // do a bit of extra bitwise stuff to unset bits that are supposed to be 0.
+    mask_values[i / 16] ^= (~tmp & 0xf) << ((i % 16) * 4);
+  }
+  return 1;
+}
+
+// Takes a binary string and interprets it as a set of bits corresponding to a
+// compute unit mask. Returns 0 on error.
+static int ParseComputeUnitMaskBinary(const char *s, uint64_t *mask_values) {
+  uint64_t tmp;
+  int length, i;
+  length = strlen(s);
+  // We already checked that the length of s is short enough, so we'll just
+  // start reading it in reverse order.
+  for (i = length - 1; i >= 0; i--) {
+    tmp = s[i];
+    if (tmp == '1') {
+      continue;
+    } else if (tmp == '0') {
+      // As before, remember that our goal is to unset the bits that should be
+      // 0, since all of the mask bits default to 1.
+      mask_values[i / 64] ^= 1ull << (i % 64);
+    } else {
+      printf("Compute unit mask %s contains invalid binary characters.\n", s);
+      return 0;
+    }
+  }
+  return 1;
+}
+
+// Attempts to parse the given string as a binary or hexadecimal number
+// representing a compute unit mask. If the string starts with "0x" it will be
+// treated as hexadecimal, otherwise it will be treated as binary. Returns 0 on
+// error.
+static int ParseComputeUnitMaskString(const char *s, uint64_t *mask_values) {
+  int max_mask_length = COMPUTE_UNIT_MASK_ENTRIES * 64;
+  int string_length = strnlen(s, max_mask_length + 1);
+  if (string_length > max_mask_length) {
+    printf("The compute unit mask string is too long to be a %d-bit mask.\n",
+      COMPUTE_UNIT_MASK_ENTRIES * 64);
+    return 0;
+  }
+  if ((string_length > 2) && (s[0] == '0') && (s[1] == 'x')) {
+    return ParseComputeUnitMaskHex(s + 2, mask_values);
+  }
+  return ParseComputeUnitMaskBinary(s, mask_values);
+}
+
 // Takes plugin config JSON object and looks for a "compute_unit_mask" list of
 // booleans. If such a list exists, this function will set the bits in the
 // mask_values buffer (note that mask_values must contain the number of 64-bit
@@ -99,18 +182,21 @@ static int IsCJSONBoolean(cJSON *o) {
 // config doesn't specify a compute unit mask for this plugin, this will simply
 // set all bits in mask_values to 1.
 static int ParseComputeUnitMask(cJSON *plugin_config, uint64_t *mask_values) {
-  // TODO (next): Implement binary and hex string CU mask configs.
+  int i, j;
   cJSON *list = cJSON_GetObjectItem(plugin_config, "compute_unit_mask");
   cJSON *array_entry = NULL;
   memset(mask_values, 0xff, COMPUTE_UNIT_MASK_ENTRIES * sizeof(uint64_t));
   if (!list) return 1;
+  if (list->type == cJSON_String) {
+    return ParseComputeUnitMaskString(list->valuestring, mask_values);
+  }
   if (list->type != cJSON_Array) {
-    printf("Expected an array for compute_unit_mask.");
+    printf("Expected an array or a string for compute_unit_mask.");
     return 0;
   }
   array_entry = list->child;
-  for (int i = 0; i < COMPUTE_UNIT_MASK_ENTRIES; i++) {
-    for (int j = 0; j < 64; j++) {
+  for (i = 0; i < COMPUTE_UNIT_MASK_ENTRIES; i++) {
+    for (j = 0; j < 64; j++) {
       if (!array_entry) break;
       if (!IsCJSONBoolean(array_entry)) {
         printf("The compute_unit_mask array must contain only booleans.");
