@@ -1,5 +1,5 @@
-// This is a simple command-line utility for printing a list of HIP devices
-// and their IDs.
+// This is a simple command-line utility for printing the current GPU clock
+// reading of a given device.
 #include <stdio.h>
 #include <stdlib.h>
 #include <hip/hip_runtime.h>
@@ -16,8 +16,6 @@ static int InternalHIPErrorCheck(hipError_t result, const char *fn,
   exit(1);
 }
 
-// The kernel for spinning a certain number of iterations. The dummy argument
-// should be NULL, it exists to prevent optimizing out the loop.
 __global__ void ReadClockKernel(uint64_t *result) {
   *result = clock64();
 }

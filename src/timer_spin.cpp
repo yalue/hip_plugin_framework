@@ -71,16 +71,13 @@ static int AllocateMemory(PluginState *state) {
 
 static void* Initialize(InitializationParameters *params) {
   PluginState *state = NULL;
+  if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
   state = (PluginState *) malloc(sizeof(*state));
   if (!state) {
     printf("Failed allocating plugin state.\n");
     return NULL;
   }
   memset(state, 0, sizeof(*state));
-  if (!CheckHIPError(hipSetDevice(params->device_id))) {
-    Cleanup(state);
-    return NULL;
-  }
   state->block_count = params->block_count;
   state->thread_count = params->thread_count;
   if (!SetClockTicks(params->additional_info, state)) {
@@ -145,7 +142,6 @@ __global__ void TimerSpinKernel(uint64_t ticks, uint64_t *dummy,
 static int Execute(void *data) {
   PluginState *state = (PluginState *) data;
   state->kernel_times.kernel_launch_times[0] = CurrentSeconds();
-  printf("Starting to spin for %llu ticks.\n", (unsigned long long) state->ticks);
   hipLaunchKernelGGL(TimerSpinKernel, state->block_count,
     state->thread_count, 0, state->stream, state->ticks,
     (uint64_t *) NULL, state->device_block_times);

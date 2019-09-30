@@ -16,7 +16,6 @@ static int InternalHIPErrorCheck(hipError_t result, const char *fn,
   exit(1);
 }
 
-
 int main(int argc, char **argv) {
   hipDeviceProp_t props;
   int count, i;

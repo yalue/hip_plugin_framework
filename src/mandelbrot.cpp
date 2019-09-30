@@ -16,7 +16,7 @@
 
 // The resulting mandelbrot set will be a square image of this size. (This may
 // be modifiable using an additional_info parameter later.)
-#define IMAGE_PIXELS_WIDE (1000)
+#define IMAGE_PIXELS_WIDE (100)
 
 // Holds the boundaries and size of the fractal, in both pixels and in terms
 // of the complex bounding box.
@@ -112,16 +112,13 @@ static int AllocateMemory(PluginState *state) {
 static void* Initialize(InitializationParameters *params) {
   PluginState *state = NULL;
   FractalDimensions *dimensions = NULL;
+  if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
   state = (PluginState *) malloc(sizeof(*state));
   if (!state) {
     printf("Failed allocating plugin state.\n");
     return NULL;
   }
   memset(state, 0, sizeof(*state));
-  if (!CheckHIPError(hipSetDevice(params->device_id))) {
-    free(state);
-    return NULL;
-  }
   state->thread_count = params->thread_count;
   dimensions = &(state->dimensions);
   dimensions->w = IMAGE_PIXELS_WIDE;

@@ -1,0 +1,20 @@
+{
+  "name": "Huge kernel test",
+  "max_iterations": 100,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "use_processes": false,
+  "do_warmup": true,
+  "plugins": [
+    {
+      "filename": "./bin/huge_kernels.so",
+      "log_name": "results/huge_kernel_test.json",
+      "thread_count": 256,
+      "block_count": 1,
+      "additional_info": {
+        "repetitions": 500,
+        "kernel_selection": "add"
+      }
+    }
+  ]
+}

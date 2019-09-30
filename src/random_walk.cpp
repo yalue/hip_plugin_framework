@@ -63,13 +63,10 @@ static void ShuffleArray(uint64_t *buffer, uint64_t element_count) {
 // Implements the Cleanup() function required by the plugin interface.
 static void Cleanup(void *data) {
   PluginState *state = (PluginState *) data;
-  if (state->device_block_times) hipFree(state->device_block_times);
-  if (state->kernel_times.block_times) {
-    hipHostFree(state->kernel_times.block_times);
-  }
-  if (state->device_random_buffer) {
-    hipHostFree(state->device_random_buffer);
-  }
+  if (!state) return;
+  hipFree(state->device_block_times);
+  hipHostFree(state->kernel_times.block_times);
+  hipHostFree(state->device_random_buffer);
   if (state->stream_created) {
     CheckHIPError(hipStreamDestroy(state->stream));
   }
@@ -173,16 +170,13 @@ __global__ void InitialWalk(uint64_t *walk_buffer, uint64_t buffer_length,
 
 static void* Initialize(InitializationParameters *params) {
   PluginState *state = NULL;
+  if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
   state = (PluginState *) malloc(sizeof(*state));
   if (!state) {
     printf("Failed allocating plugin state.\n");
     return NULL;
   }
   memset(state, 0, sizeof(*state));
-  if (!CheckHIPError(hipSetDevice(params->device_id))) {
-    Cleanup(state);
-    return NULL;
-  }
   state->block_count = params->block_count;
   state->thread_count = params->thread_count;
   if (!ParseAdditionalInfo(params->additional_info, state)) {

@@ -11,11 +11,11 @@ all: directories plugins bin/runner bin/hip_host_utilities.so bin/list_devices \
 	bin/test_clock
 
 plugins: directories bin/mandelbrot.so bin/counter_spin.so bin/timer_spin.so \
-	bin/random_walk.so
+	bin/random_walk.so bin/huge_kernels.so
 
 rodinia_plugins: directories obj/cJSON.o obj/plugin_utilities.o \
 	obj/plugin_hip_utilities.o
-	cd $(RODINIA_DIR) && make
+	+cd $(RODINIA_DIR) && make
 
 directories:
 	mkdir -p obj
@@ -55,6 +55,10 @@ bin/timer_spin.so: src/timer_spin.cpp $(PLUGIN_DEPENDENCIES)
 
 bin/random_walk.so: src/random_walk.cpp obj/cJSON.o $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/random_walk.so src/random_walk.cpp \
+		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
+
+bin/huge_kernels.so: src/huge_kernels.cpp obj/cJSON.o $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/huge_kernels.so src/huge_kernels.cpp \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
 bin/hip_host_utilities.so: src/hip_host_utilities.cpp src/plugin_interface.h
