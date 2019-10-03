@@ -3,6 +3,7 @@
 # GPU. For this to work, all result filenames must end in .json.
 #
 # Usage: python view_timeline.py [results directory (default: ./results)]
+import argparse
 import glob
 import json
 import matplotlib.pyplot as plot
@@ -262,7 +263,19 @@ def plugin_has_block_times(plugin):
             return True
     return False
 
-def plot_scenario(plugins, name):
+def get_first_block_start_time(times, count):
+    for i in range(len(times)):
+        if count[i] != 0:
+            return times[i]
+    return min(times)
+
+def get_last_block_end_time(times, count):
+    for i in range(len(times)):
+        if count[len(times) - i - 1] != 0:
+            return times[len(times) - i - 1]
+    return max(times)
+
+def plot_scenario(plugins, name, zoom_to_activity):
     """Takes a list of parsed plugin results and a scenario name and
     generates a plot showing the timeline of plugin behaviors for the
     specific scenario. Returns a matplotlib Figure object."""
@@ -278,6 +291,13 @@ def plot_scenario(plugins, name):
     total_timeline = get_total_timeline(plugins)
     min_time = min(total_timeline[0])
     max_time = max(total_timeline[0])
+    # Use alternate min and max times (corresponding to when threads are
+    # actually running) if zoom_to_activity is True.
+    if zoom_to_activity:
+        min_time = get_first_block_start_time(total_timeline[0],
+            total_timeline[1])
+        max_time = get_last_block_end_time(total_timeline[0],
+            total_timeline[1])
     axes = figure.add_subplot(len(plugins) + 1, 1, 1)
     total_timeline[0].append(max_time)
     total_timeline[1].append(0)
@@ -308,7 +328,7 @@ def plot_scenario(plugins, name):
     axes.set_xlabel("Time (seconds)")
     return figure
 
-def show_plots(filenames):
+def show_plots(filenames, zoom_to_activity):
     """Takes a list of filenames, and generates one plot per scenario found in
     the files."""
     parsed_files = []
@@ -324,16 +344,18 @@ def show_plots(filenames):
         scenarios[scenario].append(plugin)
     figures = []
     for scenario in scenarios:
-        figures.append(plot_scenario(scenarios[scenario], scenario))
+        figures.append(plot_scenario(scenarios[scenario], scenario,
+            zoom_to_activity))
     plot.show()
 
 if __name__ == "__main__":
-    base_directory = "./results"
-    if len(sys.argv) > 2:
-        print "Usage: python %s [directory containing results (./results)]" % (
-            sys.argv[0])
-        exit(1)
-    if len(sys.argv) == 2:
-        base_directory = sys.argv[1]
-    filenames = glob.glob(base_directory + "/*.json")
-    show_plots(filenames)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--directory",
+        help="Directory containing result JSON files.", default='./results')
+    parser.add_argument("-z", "--zoom-to-activity",
+        help="If set, the timeline will be centered on actual block-time execution, rather than the full program timeline.",
+        action="store_true")
+    args = parser.parse_args()
+    filenames = glob.glob(args.directory + "/*.json")
+    show_plots(filenames, args.zoom_to_activity)
+

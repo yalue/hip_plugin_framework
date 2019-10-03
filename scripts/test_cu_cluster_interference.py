@@ -20,47 +20,50 @@ def generate_config(total_count, active_cu):
     task_config = {
         "label": str(active_cu),
         "log_name": "results/active_cu%d.json" % (active_cu),
-        "filename": "./bin/mandelbrot.so",
-        "thread_count": 512,
-        "block_count": 9999,
+        "filename": "./bin/huge_kernels.so",
+        "thread_count": 256,
+        "block_count": 1,
         "compute_unit_mask": cu_mask,
-        "additional_info": 1000
+        "additional_info": {
+            "repetitions": 1000,
+            "kernel_selection": "add",
+        }
     }
     competitor_config = {
         "label": "competitor",
         "log_name": "results/cu_cluster_competitor.json",
-        "filename": "./bin/random_walk.so",
-        "thread_count": 512,
-        "block_count": 20,
+        "filename": "./bin/huge_kernels.so",
+        "thread_count": 256,
+        "block_count": 1,
         "compute_unit_mask": competitor_cu_mask,
         "additional_info": {
-            "iterations": 2000,
-            "buffer_size": 16777216,
+            "repetitions": 1000,
+            "kernel_selection": "add"
         }
     }
     competitor2_config = {
-        "label": "competitor2",
+        "label": "competitor",
         "log_name": "results/cu_cluster_competitor2.json",
-        "filename": "./bin/gaussian.so",
+        "filename": "./bin/huge_kernels.so",
         "thread_count": 256,
         "block_count": 1,
-        "compute_unit_mask": competitor_cu_mask
+        "compute_unit_mask": competitor_cu_mask,
+        "additional_info": {
+            "repetitions": 1000,
+            "kernel_selection": "add"
+        }
     }
     competitor3_config = {
-        "label": "competitor3",
+        "label": "competitor",
         "log_name": "results/cu_cluster_competitor3.json",
-        "filename": "./bin/particlefilter_naive.so",
+        "filename": "./bin/huge_kernels.so",
         "thread_count": 256,
         "block_count": 1,
-        "compute_unit_mask": competitor_cu_mask
-    }
-    competitor4_config = {
-        "label": "competitor4",
-        "log_name": "results/cu_cluster_competitor4.json",
-        "filename": "./bin/backprop.so",
-        "thread_count": 256,
-        "block_count": 1,
-        "compute_unit_mask": competitor_cu_mask
+        "compute_unit_mask": competitor_cu_mask,
+        "additional_info": {
+            "repetitions": 1000,
+            "kernel_selection": "add"
+        }
     }
     overall_config = {
         "name": "CU Cluster Overlap vs. Interference",
@@ -75,8 +78,7 @@ def generate_config(total_count, active_cu):
             task_config,
             competitor_config,
             competitor2_config,
-            competitor3_config,
-            competitor4_config
+            competitor3_config
         ]
     }
     return json.dumps(overall_config)
