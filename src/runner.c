@@ -536,8 +536,8 @@ static int WriteOutputHeader(PluginState *state) {
     info->threads_per_compute_unit) < 0) {
     return 0;
   }
-  if (fprintf(output, "\"memory_clock_rate\": %d,\n",
-    info->memory_clock_rate) < 0) {
+  if (fprintf(output, "\"clock_rate\": %llu,\n",
+    (unsigned long long) info->gpu_clocks_per_second) < 0) {
     return 0;
   }
   if (fprintf(output, "\"warp_size\": %d,\n", info->warp_size) < 0) {
@@ -595,11 +595,11 @@ static int WriteTimesToOutput(PluginState *state, TimingInformation *times) {
   FILE *output = state->output_file;
   int i, j, block_time_count;
   char sanitized_name[SANITIZE_JSON_BUFFER_SIZE];
-  uint64_t memory_clock_rate;
   uint64_t starting_clock;
+  double clock_rate;
   double t;
   KernelTimes *kernel_times = NULL;
-  memory_clock_rate = state->shared_state->device_info.memory_clock_rate;
+  clock_rate = state->shared_state->device_info.gpu_clocks_per_second;
   starting_clock = state->shared_state->device_info.starting_clock;
   // Iterate over each kernel invocation
   for (i = 0; i < times->kernel_count; i++) {
@@ -664,9 +664,8 @@ static int WriteTimesToOutput(PluginState *state, TimingInformation *times) {
     // Don't fill in the block times if the plugin didn't provide them.
     if (kernel_times->block_times == NULL) block_time_count = 0;
     for (j = 0; j < block_time_count; j++) {
-      // The memory clock rate is in kHz.
       t = (double) (kernel_times->block_times[j] - starting_clock);
-      t /= ((double) memory_clock_rate) * 1000.0;
+      t /= clock_rate;
       if (fprintf(output, "%.9f", t) < 0) {
         return 0;
       }

@@ -21,9 +21,7 @@ typedef struct {
   int gcn_architecture;
   int compute_unit_count;
   int threads_per_compute_unit;
-  // This will be a clock rate, in kHz. HIP appears to use the memory clock
-  // when calling clock64() in kernels.
-  int memory_clock_rate;
+  uint64_t gpu_clocks_per_second;
   int warp_size;
   // This will be set to the GPU's clock at the time the struct is populated.
   // Usually, this will be used to determine a starting clock time.

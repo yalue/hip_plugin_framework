@@ -34,9 +34,10 @@
 #define MAXBLOCKSIZE (512)
 #define BLOCK_SIZE_XY (4)
 
-// This was supplied as a command-line "-s" argument in the original, but we'll
-// hardcode it here to the value that was in Rodinia 3.1's "run" file
-// associated with the benchmark.
+// This was supplied as a command-line "-s" argument in the original. The
+// original "run" file had this set to 16, so that's what we'll use here.
+// Setting it to something bigger causes a segfault for reasons I haven't
+// tried to debug yet.
 #define MATRIX_SIZE (16)
 
 typedef struct {

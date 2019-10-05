@@ -31,11 +31,38 @@ def convert_values_to_cdf(values):
         data_list[i] *= 1000.0
     return [data_list, ratio_list]
 
+def get_total_kernel_times(plugin):
+    """ This does extra processing on the plugin's results in order to get
+    "total kernel time", which doesn't correspond to a real JSON key. Instead,
+    it consists of the sum of actual kernel times, from launch to
+    after the synchronization, for each iteration of the plugin. """
+    to_return = []
+    current_total = 0.0
+    for t in plugin["times"]:
+        # Reset the running total whenever we've encountered a new iteration,
+        # as indicated by a JSON record containing CPU times.
+        if "cpu_times" in t:
+            # The check against 0.0 takes care of both the first iteration, and
+            # better handles benchmarks without kernel times.
+            if current_total != 0.0:
+                to_return.append(current_total)
+            current_total = 0.0
+            continue
+        if "kernel_launch_times" not in t:
+            continue
+        start = t["kernel_launch_times"][0]
+        end = t["kernel_launch_times"][-1]
+        current_total += end - start
+
+    return to_return
+
 def get_plugin_cdf(plugin, times_key):
     """Takes a parsed plugin result JSON file and returns a CDF (in seconds
     and percentages) of the CPU (total) times for the plugin. The times_key
     argument can be used to specify which range of times (in the times array)
     should be used to calculate the durations to include in the CDF."""
+    if times_key == "total_kernel_times":
+        return convert_values_to_cdf(get_total_kernel_times(plugin))
     raw_values = []
     for t in plugin["times"]:
         if not times_key in t:
@@ -77,13 +104,14 @@ def get_line_styles():
         "cyan",
         "magenta",
         "y",
-        "black"
+        "black",
     ]
-    style_options = [
-        "-",
-        "--",
-        "-.",
-        ":"
+    # [Solid line, dashed line, dash-dot line, dotted line]
+    dashes_options = [
+        [1, 0],
+        [3, 1, 3, 1],
+        [3, 1, 1, 1],
+        [1, 1, 1, 1],
     ]
     marker_options = [
         None,
@@ -97,14 +125,14 @@ def get_line_styles():
     # Build a combined list containing every style combination.
     all_styles = []
     for m in marker_options:
-        for s in style_options:
+        for d in dashes_options:
             for c in color_options:
                 to_add = {}
                 if m is not None:
                     to_add["marker"] = m
                     to_add["markevery"] = 0.1
-                to_add["ls"] = s
                 to_add["c"] = c
+                to_add["dashes"] = d
                 all_styles.append(to_add)
     return all_styles
 
@@ -147,7 +175,7 @@ def plot_scenario(plugins, name, times_key):
     # Make the axes track data exactly, we'll manually add padding later.
     axes.autoscale(enable=True, axis='both', tight=True)
     for i in range(len(cdfs)):
-        axes.plot(cdfs[i][0], cdfs[i][1], label=labels[i], lw=3,
+        axes.plot(cdfs[i][0], cdfs[i][1], label=labels[i], lw=1.5,
             **(style_cycler.next()))
     add_plot_padding(axes)
     axes.set_xlabel("Time (milliseconds)")
