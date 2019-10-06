@@ -59,6 +59,7 @@ static int VerifyGlobalConfigKeys(cJSON *main_config) {
     "plugins",
     "sync_every_iteration",
     "do_warmup",
+    "omit_block_times",
     "comment",
   };
   keys_count = sizeof(valid_keys) / sizeof(char*);
@@ -497,6 +498,17 @@ GlobalConfiguration* ParseConfiguration(const char *config) {
     to_return->do_warmup = tmp == cJSON_True;
   } else {
     to_return->do_warmup = 0;
+  }
+  entry = cJSON_GetObjectItem(root, "omit_block_times");
+  if (entry) {
+    tmp = entry->type;
+    if ((tmp != cJSON_True) && (tmp != cJSON_False)) {
+      printf("Invalid omit_block_times setting in config.\n");
+      goto ErrorCleanup;
+    }
+    to_return->omit_block_times = tmp == cJSON_True;
+  } else {
+    to_return->omit_block_times = 0;
   }
   // Finally, parse the plugin list. Ensure that we've obtained a valid JSON
   // array for the plugins before calling ParsePluginList.

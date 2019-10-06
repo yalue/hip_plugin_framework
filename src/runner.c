@@ -586,6 +586,49 @@ static int WriteCPUTimesToOutput(PluginState *state, CPUTimes *t) {
   return 1;
 }
 
+// This function is called by WriteTimesToOutput and is only responsible for
+// writing block times to the output file, since it was a more complex
+// operation than most of the other stuff in that function. It takes a
+// KernelTimes struct, containing the block times to write. (Basically, this
+// is responsible for writing the "block_times": [....] portion of the output
+// file only.)
+static int WriteBlockTimes(PluginState *state, KernelTimes *kernel) {
+  SharedState *shared_state = state->shared_state;
+  FILE *output = state->output_file;
+  uint64_t starting_clock;
+  double clock_rate, t;
+  int i, block_time_count;
+  starting_clock = shared_state->device_info.starting_clock;
+  clock_rate = shared_state->device_info.gpu_clocks_per_second;
+  // TODO: Figure out a way to get a steady clock rate, if possible? Neither
+  // the rate provided by hipGetDeviceProperties nor the rate obtained by just
+  // measuring the clocks on the GPU vs. CPU time provide accurate-seeming
+  // results.
+  if (fprintf(output, "\"block_times\": [") < 0) {
+    return 0;
+  }
+  // Remember we have both a start and end time for every block.
+  block_time_count = kernel->block_count * 2;
+  // Don't fill in the block times if the plugin didn't provide them.
+  if (kernel->block_times == NULL) block_time_count = 0;
+  // Don't fill in the block times if the config says to omit them.
+  if (shared_state->global_config->omit_block_times) block_time_count = 0;
+  for (i = 0; i < block_time_count; i++) {
+    t = (double) (kernel->block_times[i] - starting_clock);
+    t /= clock_rate;
+    if (fprintf(output, "%.9f", t) < 0) {
+      return 0;
+    }
+    if (i < (block_time_count - 1)) {
+      if (fprintf(output, ",") < 0) return 0;
+    }
+  }
+  if (fprintf(output, "]") < 0) {
+    return 0;
+  }
+  return 1;
+}
+
 // Formats the given timing information as a JSON object and appends it to the
 // output file. Returns 0 on error and 1 on success. Times will be written in a
 // floatig-point number of *seconds*, even though they are recorded in ns. This
@@ -593,14 +636,10 @@ static int WriteCPUTimesToOutput(PluginState *state, CPUTimes *t) {
 static int WriteTimesToOutput(PluginState *state, TimingInformation *times) {
   SharedState *shared_state = state->shared_state;
   FILE *output = state->output_file;
-  int i, j, block_time_count;
   char sanitized_name[SANITIZE_JSON_BUFFER_SIZE];
-  uint64_t starting_clock;
-  double clock_rate;
-  double t;
   KernelTimes *kernel_times = NULL;
-  clock_rate = state->shared_state->device_info.gpu_clocks_per_second;
-  starting_clock = state->shared_state->device_info.starting_clock;
+  double t;
+  int i;
   // Iterate over each kernel invocation
   for (i = 0; i < times->kernel_count; i++) {
     kernel_times = times->kernel_times + i;
@@ -652,33 +691,11 @@ static int WriteTimesToOutput(PluginState *state, TimingInformation *times) {
     if (fprintf(output, "%.9f], ", t) < 0) {
       return 0;
     }
-    // Finally, include block times for the output. Try to convert them to
-    // seconds using the reported clock rate. (TODO: Is the clock rate reported
-    // by hipGetDeviceProperties actually going to lead to a steady time, or
-    // can the clock rate change during kernel execution?)
-    if (fprintf(output, "\"block_times\": [") < 0) {
-      return 0;
-    }
-    // Remember we have both a start and end time for every block.
-    block_time_count = kernel_times->block_count * 2;
-    // Don't fill in the block times if the plugin didn't provide them.
-    if (kernel_times->block_times == NULL) block_time_count = 0;
-    for (j = 0; j < block_time_count; j++) {
-      t = (double) (kernel_times->block_times[j] - starting_clock);
-      t /= clock_rate;
-      if (fprintf(output, "%.9f", t) < 0) {
-        return 0;
-      }
-      if (j < (block_time_count - 1)) {
-        if (fprintf(output, ",") < 0) {
-          return 0;
-        }
-      }
-    }
+    if (!WriteBlockTimes(state, kernel_times)) return 0;
 
     // We're done printing information about this kernel, print the CPU core as
     // a sanity check.
-    if (fprintf(output, "], \"cpu_core\": %d}", sched_getcpu()) < 0) {
+    if (fprintf(output, ", \"cpu_core\": %d}", sched_getcpu()) < 0) {
       return 0;
     }
   }

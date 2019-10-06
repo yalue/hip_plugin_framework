@@ -12,7 +12,7 @@ def generate_config(active_cu_count, total_cu_count):
     plugin_config = {
         "label": str(active_cu_count),
         "log_name": "results/%d_compute_units.json" % (active_cu_count),
-        "filename": "./bin/mandelbrot.so",
+        "filename": "./bin/backprop.so",
         "thread_count": 512,
         "block_count": 9999,
         "compute_unit_mask": cu_mask,
@@ -20,11 +20,12 @@ def generate_config(active_cu_count, total_cu_count):
     }
     overall_config = {
         "name": "Compute Unit Count vs. Performance",
-        "max_iterations": 100,
+        "max_iterations": 1000,
         "max_time": 0,
         "gpu_device_id": 1,
         "pin_cpus": True,
         "do_warmup": True,
+        "omit_block_times": True,
         "plugins": [plugin_config]
     }
     return json.dumps(overall_config)

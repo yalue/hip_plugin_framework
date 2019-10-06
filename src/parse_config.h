@@ -74,6 +74,11 @@ typedef struct {
   // be included in the final log. This can be used as a warm-up pass to ensure
   // that kernels and data are brought into the relevant caches. Defaults to 0.
   int do_warmup;
+  // If 1, then block times will be omitted from the results JSON (the
+  // block_times field will be an empty array). This is intended to save space
+  // and processing time in experiments where block times aren't needed.
+  // Defaults to 0.
+  int omit_block_times;
   // The number of entries in the plugins list. Must never be 0.
   int plugin_count;
   // The list of plugins to run.
