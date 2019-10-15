@@ -596,10 +596,9 @@ static int WriteBlockTimes(PluginState *state, KernelTimes *kernel) {
   SharedState *shared_state = state->shared_state;
   FILE *output = state->output_file;
   uint64_t starting_clock;
-  double clock_rate, t;
+  double t;
   int i, block_time_count;
   starting_clock = shared_state->device_info.starting_clock;
-  clock_rate = shared_state->device_info.gpu_clocks_per_second;
   // TODO: Figure out a way to get a steady clock rate, if possible? Neither
   // the rate provided by hipGetDeviceProperties nor the rate obtained by just
   // measuring the clocks on the GPU vs. CPU time provide accurate-seeming
@@ -613,9 +612,10 @@ static int WriteBlockTimes(PluginState *state, KernelTimes *kernel) {
   if (kernel->block_times == NULL) block_time_count = 0;
   // Don't fill in the block times if the config says to omit them.
   if (shared_state->global_config->omit_block_times) block_time_count = 0;
+  // Compute the time to write, in millions of clock cycles.
   for (i = 0; i < block_time_count; i++) {
     t = (double) (kernel->block_times[i] - starting_clock);
-    t /= clock_rate;
+    t /= 1e6;
     if (fprintf(output, "%.9f", t) < 0) {
       return 0;
     }

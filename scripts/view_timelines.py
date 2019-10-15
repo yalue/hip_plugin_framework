@@ -305,7 +305,6 @@ def plot_scenario(plugins, name, zoom_to_activity):
     set_axes_dimensions(axes, min_time, max_time, 0, max_threads)
     axes.plot(total_timeline[0], total_timeline[1], color="k", lw=2)
     axes.set_ylabel("# threads,\ntotal")
-    axes.set_xlabel("Time (seconds)")
     # Plot each timeline in a separate subplot
     for i in range(len(plugins)):
         plugin = plugins[i]
@@ -325,7 +324,7 @@ def plot_scenario(plugins, name, zoom_to_activity):
             label = plugin["label"]
         axes.set_ylabel("# threads,\n" + label)
     # Add the X label below the bottommost subplot
-    axes.set_xlabel("Time (seconds)")
+    axes.set_xlabel("Time (cycles * 1.0e-6)")
     return figure
 
 def show_plots(filenames, zoom_to_activity):

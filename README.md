@@ -168,7 +168,8 @@ numbers of seconds. The format of the log file is:
         <CPU time immediately after hipStreamSynchronize returned. This will
         be set to 0 if hipStreamSynchronize isn't called for this kernel.>],
       "block_times": [<Start time>, <End time>, ..., <This may be empty if the
-        plugin doesn't record block times.>],
+        plugin doesn't record block times. This contains block start and end
+        times in *millions of GPU cycles*, not seconds.>],
       "cpu_core": <The current CPU core being used>
     },
     ...
