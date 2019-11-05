@@ -54,7 +54,7 @@
 
 #ifndef DWT_CUDA_H
 #define DWT_CUDA_H
-#include "../dwt_plugin_state.h"
+#include "dwt_plugin_state.h"
 
 namespace dwt_cuda {
 

@@ -180,6 +180,7 @@ static int GetDeviceInfo(int device_id, DeviceInformation *info) {
       exit(EXIT_FAILURE);
     }
     if (!info_function(device_id, (DeviceInformation *) buffer)) {
+      printf("GetDeviceInformation returned an error.\n");
       dlclose(library_handle);
       exit(EXIT_FAILURE);
     }
@@ -189,16 +190,18 @@ static int GetDeviceInfo(int device_id, DeviceInformation *info) {
   // The parent will wait for the child to finish, then copy the contents from
   // the shared buffer.
   if (wait(&status) < 0) {
-    printf("failed waiting on the child process.\n");
+    printf("Failed waiting on the child process.\n");
     FreeSharedBuffer(buffer, sizeof(*info));
     return 0;
   }
   memcpy(info, buffer, sizeof(*info));
   FreeSharedBuffer(buffer, sizeof(*info));
+  /*
   if (!WIFEXITED(status)) {
     printf("The child process didn't exit normally.\n");
     return 0;
   }
+  */
   if (WEXITSTATUS(status) != EXIT_SUCCESS) {
     printf("The child process exited with an error.\n");
     return 0;

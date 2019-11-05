@@ -41,24 +41,39 @@ obj/plugin_hip_utilities.o: src/plugin_hip_utilities.cpp \
 obj/plugin_utilities.o: src/plugin_utilities.c src/plugin_utilities.h
 	gcc -c $(CFLAGS) -o obj/plugin_utilities.o src/plugin_utilities.c
 
-bin/mandelbrot.so: src/mandelbrot.cpp $(PLUGIN_DEPENDENCIES)
-	hipcc --shared $(CFLAGS) -o bin/mandelbrot.so src/mandelbrot.cpp \
+obj/mandelbrot.o: src/mandelbrot.cpp $(PLUGIN_DEPENDENCIES)
+	hipcc -c $(CFLAGS) -o obj/mandelbrot.o src/mandelbrot.cpp
+
+bin/mandelbrot.so: obj/mandelbrot.o $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/mandelbrot.so obj/mandelbrot.o \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o
 
-bin/counter_spin.so: src/counter_spin.cpp $(PLUGIN_DEPENDENCIES)
-	hipcc --shared $(CFLAGS) -o bin/counter_spin.so src/counter_spin.cpp \
+obj/counter_spin.o: src/counter_spin.cpp $(PLUGIN_DEPENDENCIES)
+	hipcc -c $(CFLAGS) -o obj/counter_spin.o src/counter_spin.cpp
+
+bin/counter_spin.so: obj/counter_spin.o $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/counter_spin.so obj/counter_spin.o \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o
 
-bin/timer_spin.so: src/timer_spin.cpp $(PLUGIN_DEPENDENCIES)
-	hipcc --shared $(CFLAGS) -o bin/timer_spin.so src/timer_spin.cpp \
+obj/timer_spin.o: src/timer_spin.cpp $(PLUGIN_DEPENDENCIES)
+	hipcc -c $(CFLAGS) -o obj/timer_spin.o src/timer_spin.cpp
+
+bin/timer_spin.so: obj/timer_spin.o $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/timer_spin.so obj/timer_spin.o \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o
 
-bin/random_walk.so: src/random_walk.cpp obj/cJSON.o $(PLUGIN_DEPENDENCIES)
-	hipcc --shared $(CFLAGS) -o bin/random_walk.so src/random_walk.cpp \
+obj/random_walk.o: src/random_walk.cpp obj/cJSON.o $(PLUGIN_DEPENDENCIES)
+	hipcc -c $(CFLAGS) -o obj/random_walk.o src/random_walk.cpp
+
+bin/random_walk.so: obj/random_walk.o obj/cJSON.o $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/random_walk.so obj/random_walk.o \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
-bin/huge_kernels.so: src/huge_kernels.cpp obj/cJSON.o $(PLUGIN_DEPENDENCIES)
-	hipcc --shared $(CFLAGS) -o bin/huge_kernels.so src/huge_kernels.cpp \
+obj/huge_kernels.o: src/huge_kernels.cpp obj/cJSON.o $(PLUGIN_DEPENDENCIES)
+	hipcc -c $(CFLAGS) -o obj/huge_kernels.o src/huge_kernels.cpp
+
+bin/huge_kernels.so: obj/huge_kernels.o obj/cJSON.o $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/huge_kernels.so obj/huge_kernels.o \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
 bin/hip_host_utilities.so: src/hip_host_utilities.cpp src/plugin_interface.h

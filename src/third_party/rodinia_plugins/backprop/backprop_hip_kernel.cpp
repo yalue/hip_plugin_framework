@@ -1,5 +1,7 @@
-#ifndef BACKPROP_HIP_KERNEL_H
-#define BACKPROP_HIP_KERNEL_H
+#include <hip/hip_runtime.h>
+#include "backprop.h"
+#include "backprop_state.h"
+#include "backprop_hip_kernel.h"
 
 __global__ void bpnn_layerforward_CUDA(float *input_cuda,
     float *output_hidden_cuda, float *input_hidden_cuda,
@@ -63,6 +65,4 @@ __global__ void bpnn_adjust_weights_cuda(float *delta, int hid, float *ly,
   }
   block_times[block_index * 2 + 1] = clock64();
 }
-
-#endif  // BACKPROP_HIP_KERNEL_H
 

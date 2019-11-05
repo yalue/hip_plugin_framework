@@ -1,11 +1,20 @@
 include ../common.mk
+.PHONY: all
 
-HIPFILES := main.cpp dwt.cpp components.cpp dwt_hip/fdwt53.cpp \
-	dwt_hip/common.cpp
+HIPFILES := dwt_main.cpp dwt.cpp dwt_components.cpp fdwt53.cpp
 
-HEADERS := common.h dwt.h dwt_hip/common.h dwt_hip/dwt.h dwt_hip/io.h \
-	dwt_hip/transform_buffer.h dwt_plugin_state.h
+HEADERS := common.h dwt.h hip_common.h hip_dwt.h hip_io.h \
+	hip_transform_buffer.h dwt_plugin_state.h
 
-$(BIN_DIR)/dwt2d.so: $(HIPFILES) $(HEADERS)
-	hipcc --shared $(CFLAGS) -o $(BIN_DIR)/dwt2d.so $(HIPFILES) $(PLUGIN_UTILS)
+# I'm not very good at make, but this *should* just be telling it to create one
+# .o file for each .cpp file in $(OBJ_DIR).
+HIPOBJ := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(HIPFILES))
+
+all: $(BIN_DIR)/dwt2d.so
+
+$(OBJ_DIR)/%.o: %.cpp
+	hipcc -c $(CFLAGS) -o $@ $<
+
+$(BIN_DIR)/dwt2d.so: $(HIPOBJ)
+	hipcc --shared $(CFLAGS) -o $(BIN_DIR)/dwt2d.so $(HIPOBJ) $(PLUGIN_UTILS)
 

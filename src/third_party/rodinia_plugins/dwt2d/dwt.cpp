@@ -23,7 +23,6 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include "dwt_hip/dwt.h"
 #include <assert.h>
 #include <errno.h>
 #include <error.h>
@@ -37,8 +36,9 @@
 
 #include "common.h"
 #include "dwt.h"
-#include "dwt_hip/common.h"
 #include "dwt_plugin_state.h"
+#include "hip_common.h"
+#include "hip_dwt.h"
 
 inline int fdwt(int *in, int *out, int width, int height, int levels,
     PluginState *s) {

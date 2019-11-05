@@ -17,7 +17,7 @@
 #include "plugin_utilities.h"
 
 #include "backprop.h"
-#include "backprop_hip_kernel.cpp"
+#include "backprop_hip_kernel.h"
 #include "backprop_state.h"
 
 // This is from the original Rodinia 3.1 benchmark's "run" file--it must be a

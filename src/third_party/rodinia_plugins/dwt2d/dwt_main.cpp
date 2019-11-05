@@ -195,7 +195,7 @@ static int AllocateMemory(PluginState *s) {
   // Now we'll need to do the fdwt53 kernel, which may use a different number
   // of threads and blocks for each invocation. We'll just duplicate the
   // relevant part of the thread and block count computations from
-  // dwt_hip/fdwt53.cpp here.
+  // fdwt53.cpp here.
   for (j = 0; j < COLOR_CHANNELS; j++) {
     width = d->pixWidth;
     height = d->pixHeight;

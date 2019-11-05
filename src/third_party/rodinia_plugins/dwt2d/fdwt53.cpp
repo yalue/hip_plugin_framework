@@ -33,10 +33,10 @@
 #include "plugin_hip_utilities.h"
 #include "plugin_utilities.h"
 
-#include "../dwt_plugin_state.h"
-#include "common.h"
-#include "io.h"
-#include "transform_buffer.h"
+#include "dwt_plugin_state.h"
+#include "hip_common.h"
+#include "hip_io.h"
+#include "hip_transform_buffer.h"
 
 namespace dwt_cuda {
 
