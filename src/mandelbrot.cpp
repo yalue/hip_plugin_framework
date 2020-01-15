@@ -16,7 +16,7 @@
 
 // The resulting mandelbrot set will be a square image of this size. (This may
 // be modifiable using an additional_info parameter later.)
-#define IMAGE_PIXELS_WIDE (256)
+#define IMAGE_PIXELS_WIDE (512)
 
 // Holds the boundaries and size of the fractal, in both pixels and in terms
 // of the complex bounding box.
