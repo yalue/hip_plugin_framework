@@ -39,7 +39,7 @@ def get_kernel_timeline(kernel_times):
         if (len(start_times) == 0) and (len(end_times) == 0):
             break
         if len(end_times) == 0:
-            print "Error! The last block end time was before a start time."
+            print("Error! The last block end time was before a start time.")
             exit(1)
         current_time = 0.0
         previous_thread_count = current_thread_count

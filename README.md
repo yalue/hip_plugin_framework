@@ -81,7 +81,8 @@ The layout of each configuration file is as follows:
       "log_name": <String. Optional. The filename of the JSON log for this
         particular plugin. If not provided, this plugin's log will be given a
         default name based on its filename, process and thread ID. If this
-        doesn't start with '/', it will be relative to base_result_directory.>,
+        doesn't start with '/', it will be relative to base_result_directory.
+        This can be /dev/null to throw away logs.>,
       "label:": <String. Optional. A label or name for this specific plugin, to
       be copied to its output file.>,
       "thread_count": <Number. Required, but may be ignored. The number of HIP

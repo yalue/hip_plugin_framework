@@ -113,6 +113,7 @@ static void* Initialize(InitializationParameters *params) {
   PluginState *state = NULL;
   FractalDimensions *dimensions = NULL;
   if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
+  if (!CheckHIPError(hipSetDeviceFlags(hipDeviceScheduleYield))) return NULL;
   state = (PluginState *) malloc(sizeof(*state));
   if (!state) {
     printf("Failed allocating plugin state.\n");
