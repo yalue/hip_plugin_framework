@@ -2,7 +2,7 @@
   "name": "Rodinia Gaussian Benchmark Test",
   "max_iterations": 1000,
   "max_time": 0,
-  "gpu_device_id": 1,
+  "gpu_device_id": 0,
   "use_processes": false,
   "do_warmup": true,
   "plugins": [

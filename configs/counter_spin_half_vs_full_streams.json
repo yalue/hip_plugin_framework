@@ -2,7 +2,7 @@
   "name": "Counter spin test, streams in single process",
   "max_iterations": 1,
   "max_time": 0,
-  "gpu_device_id": 1,
+  "gpu_device_id": 0,
   "use_processes": false,
   "plugins": [
     {

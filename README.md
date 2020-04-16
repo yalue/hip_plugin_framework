@@ -35,6 +35,29 @@ To test it, run:
 ./bin/runner configs/simple.json
 ```
 
+Rodinia Plugins
+---------------
+
+This project contains several plugins that have been ported from the [Rodinia
+benchmark suite](http://lava.cs.virginia.edu/Rodinia/download_links.htm). The
+code for these plugins are located in the `src/third_party/rodinia_plugins`
+directory.  The four plugins, `backprop`, `dwt2d`, `gaussian`, and
+`particlefilter` have been modified to clean up code, remove global variables,
+and to adhere to the plugin interface required by the project.
+
+Compile these plugins by running `make rodinia_plugins` in the main project
+directory. Some sample configs exist for testing these plugins in `configs/`.
+For example, running `./bin/runner configs/particlefilter.json` launches a
+single instance of the `particlefilter` plugin.
+
+Known Issues
+------------
+
+The framework ends with a segfault when `use_processes` is set to `true` in a
+configuration file. This occurs when the framework attempts to clean up and
+unload plugin shared libraries, but does not affect plugin execution or
+interfere with creating output files.
+
 Configuration Files
 -------------------
 

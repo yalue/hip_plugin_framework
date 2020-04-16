@@ -8,8 +8,8 @@
     {
       "filename": "./bin/timer_spin.so",
       "log_name": "results/timer_spin_test.json",
-      "thread_count": 256,
-      "block_count": 1,
+      "thread_count": 512,
+      "block_count": 1000,
       "additional_info": 10000000
     }
   ]
