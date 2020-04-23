@@ -21,12 +21,16 @@ hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint64_t *mask,
   status = hipStreamCreate(&to_create);
   if (status != hipSuccess) return status;
   if (mask_count == 0) return hipSuccess;
+#ifdef HIP_HAS_STREAM_SET_CU_MASK
   status = hipStreamSetComputeUnitMask(to_create, mask[0]);
   if (status != hipSuccess) {
     // Wrap this in an error check to print the message if more errors occur.
     CheckHIPError(hipStreamDestroy(to_create));
     return status;
   }
+#else
+  printf("Warning: Setting a CU mask isn't supported in this build of HIP.\n");
+#endif
   *stream = to_create;
   return hipSuccess;
 }

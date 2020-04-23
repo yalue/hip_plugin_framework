@@ -7,19 +7,30 @@ About
 This project is based on the [CUDA Scheduling Examiner](https://github.com/yalue/cuda_scheduling_examiner_mirror)
 framework, which made it convenient to configure and examine the behavior of
 multiple GPU-sharing tasks on NVIDIA.  The HIP plugin framework is
-architecturally similar, but intended primarily to carry out a similar task on
-AMD GPUs, which have the benefit of greater open-source availability.
+architecturally similar, but has been overhauled to use more intuitive
+terminology and to remove any NVIDIA-specific code.  (Which, unfortunately
+means that this project is unable to plot which compute units blocks are
+assigned to.
 
-Since this project is primarily intended to support my own research, some of it
-will require modified versions of AMD's HIP framework, and the entire ROCm
-infrastructure.
+Some of this project may require modified versions of AMD's HIP framework or
+other ROCm components (as it is intended to support my research). Users who
+want to use the full set of features, including ones requiring non-standard
+HIP, can compile and install the modified ROCm components from
+[this repository](https://github.com/yalue/rocm_mega_repo).
+
+For now, the only non-standard HIP feature is the ability to set a compute-unit
+mask for individual streams. At the moment, the framework will simply print a
+warning and ignore compute unit masks if attempting to set one while using a
+version of the framework compiled using the unmodified, stock, version of HIP.
+
 
 Basic Compilation and Usage
 ---------------------------
 
 Compiling this project requires HIP, and `hipcc` must be on your `PATH`. Only
-Linux is supported for now, and only AMD GPUs.  Specifically modified versions
-of HIP (and HIP's dependencies) may be required for some parts of the code.
+Linux is supported for now, and only AMD GPUs.  (Compilation will also work on
+NVIDIA, but it may require modifying the makefile.  This is a work in progress
+for me.)
 
 To build:
 
