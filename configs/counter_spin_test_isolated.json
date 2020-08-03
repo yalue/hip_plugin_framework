@@ -1,0 +1,18 @@
+{
+  "name": "Counter spin test",
+  "max_iterations": 1000,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "use_processes": false,
+  "omit_block_times": false,
+  "plugins": [
+    {
+      "filename": "./bin/counter_spin.so",
+      "label": "Isolated",
+      "log_name": "results/counter_spin_test_isolated.json",
+      "thread_count": 256,
+      "block_count": 1000,
+      "additional_info": 10000
+    }
+  ]
+}

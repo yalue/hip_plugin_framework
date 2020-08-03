@@ -29,7 +29,7 @@ def generate_config(cu_mask, stripe_width):
         "name": name,
         "max_iterations": 1000,
         "max_time": 0,
-        "gpu_device_id": 1,
+        "gpu_device_id": 0,
         "pin_cpus": True,
         "do_warmup": True,
         "omit_block_times": True,
@@ -51,7 +51,7 @@ def cu_mask_to_int(cu_mask):
 def cu_mask_to_binary_string(cu_mask):
     """ A utility function that takes an array of booleans and returns a string
     of 0s and 1s. """
-    return format(cu_mask_to_int(cu_mask), "032b")
+    return format(cu_mask_to_int(cu_mask), "064b")
 
 def cu_mask_to_hex_string(cu_mask):
     return format(cu_mask_to_int(cu_mask), "08x")
@@ -79,7 +79,7 @@ def get_cu_mask(active_cus, total_cus, stripe_width):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cu_count", type=int, default=32,
+    parser.add_argument("--cu_count", type=int, default=60,
         help="The total number of CUs on the GPU.")
     parser.add_argument("--stripe_width", type=int, default=1,
         help="The width, in CUs, of the \"stripe\" used to assign subsequent "+
