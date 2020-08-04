@@ -220,23 +220,6 @@ static int CopyIn(void *data) {
   return 1;
 }
 
-// The kernel for spinning a certain number of iterations. The dummy argument
-// should be NULL, it exists to prevent optimizing out the loop.
-__global__ void CounterSpinKernel(uint64_t max_iterations, uint64_t *dummy,
-  uint64_t *block_times) {
-  uint64_t i, accumulator;
-  uint64_t start_clock = clock64();
-  if (start_clock < block_times[hipBlockIdx_x * 2]) {
-    block_times[hipBlockIdx_x * 2] = start_clock;
-  }
-  accumulator = 0;
-  for (i = 0; i < max_iterations; i++) {
-    accumulator += i % hipBlockIdx_x;
-  }
-  if (dummy) *dummy = accumulator;
-  block_times[hipBlockIdx_x * 2 + 1] = clock64();
-}
-
 // The kernel for randomly traversing the buffer. The dummy argument should be
 // NULL, it exists to prevent optimizing out the loop.
 __global__ void RandomWalkKernel(uint64_t iterations, uint64_t *accumulator,

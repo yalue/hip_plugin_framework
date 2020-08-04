@@ -1,0 +1,21 @@
+{
+  "name": "Memory-copy test",
+  "comment": "A basic config showing the options for the memory_copy.so plugin.",
+  "max_iterations": 1000,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "use_processes": false,
+  "plugins": [
+    {
+      "filename": "./bin/memory_copy.so",
+      "log_name": "results/memory_copy_test.json",
+      "thread_count": 512,
+      "block_count": 256,
+      "additional_info": {
+        "buffer_size": 100000000,
+        "copy_subdivisions": 1,
+        "sync_every_copy": false
+      }
+    }
+  ]
+}

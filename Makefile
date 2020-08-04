@@ -11,7 +11,7 @@ all: directories plugins bin/runner bin/hip_host_utilities.so bin/list_devices \
 	bin/test_clock
 
 plugins: directories bin/mandelbrot.so bin/counter_spin.so bin/timer_spin.so \
-	bin/random_walk.so bin/huge_kernels.so
+	bin/random_walk.so bin/huge_kernels.so bin/memory_copy.so
 
 rodinia_plugins: directories obj/cJSON.o obj/plugin_utilities.o \
 	obj/plugin_hip_utilities.o
@@ -62,14 +62,21 @@ bin/timer_spin.so: obj/timer_spin.o $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/timer_spin.so obj/timer_spin.o \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o
 
-obj/random_walk.o: src/random_walk.cpp obj/cJSON.o $(PLUGIN_DEPENDENCIES)
+obj/random_walk.o: src/random_walk.cpp $(PLUGIN_DEPENDENCIES)
 	hipcc -c $(CFLAGS) -o obj/random_walk.o src/random_walk.cpp
 
 bin/random_walk.so: obj/random_walk.o obj/cJSON.o $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/random_walk.so obj/random_walk.o \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
-obj/huge_kernels.o: src/huge_kernels.cpp obj/cJSON.o $(PLUGIN_DEPENDENCIES)
+obj/memory_copy.o: src/memory_copy.cpp $(PLUGIN_DEPENDENCIES)
+	hipcc -c $(CFLAGS) -o obj/memory_copy.o src/memory_copy.cpp
+
+bin/memory_copy.so: obj/memory_copy.o obj/cJSON.o $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/memory_copy.so obj/memory_copy.o \
+		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
+
+obj/huge_kernels.o: src/huge_kernels.cpp $(PLUGIN_DEPENDENCIES)
 	hipcc -c $(CFLAGS) -o obj/huge_kernels.o src/huge_kernels.cpp
 
 bin/huge_kernels.so: obj/huge_kernels.o obj/cJSON.o $(PLUGIN_DEPENDENCIES)
