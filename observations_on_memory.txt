@@ -1,0 +1,7 @@
+Short observations on memory copies
+===================================
+
+ - Copy times appear to be consistently linear, ~13.1 MB/s to the device.
+ - Competitors copying 10MB chunks appears to have very little overall impact on response times.
+   - Good news? This may imply that memory copies may be blocked only be other ongoing copies?
+   - Next test: competitors should copy the full 100MB chunks
