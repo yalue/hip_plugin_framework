@@ -100,16 +100,19 @@ def show_plots(filenames, times_key):
     all_scenarios = {}
     counter = 1
     for name in filenames:
-        print "Parsing file %d / %d: %s" % (counter, len(filenames), name)
+        print("Parsing file %d / %d: %s" % (counter, len(filenames), name))
         counter += 1
         with open(name) as f:
             parsed = json.loads(f.read())
+            if "label" not in parsed:
+                print("Skipping %s: no \"label\" field in file." % (name))
+                continue
             if len(parsed["times"]) < 2:
-                print "Skipping %s: no recorded times in file." % (name)
+                print("Skipping %s: no recorded times in file." % (name))
                 continue
             float_value = convert_to_float(parsed["label"])
             if float_value is None:
-                print "Skipping %s: label isn't a number." % (name)
+                print("Skipping %s: label isn't a number." % (name))
                 continue
             summary_values = benchmark_summary_values(parsed, times_key)
             name = parsed["scenario_name"]
