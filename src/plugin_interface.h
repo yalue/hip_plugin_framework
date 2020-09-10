@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-// The number of 64-bit values that can comprise the compute unit bitmask.
+// The number of 32-bit values that can comprise the compute unit bitmask.
 #define COMPUTE_UNIT_MASK_ENTRIES (4)
 
 // This struct is filled in by the host, and passed to plugins for reference.
@@ -49,10 +49,10 @@ typedef struct {
   // This is used as a list of bits to enable or disable GPU compute units.
   // For example, the lowest bit of compute_unit_mask[0] must be 1 in order to
   // use compute unit 0 on the GPU. compute_unit_mask[0] corresponds to compute
-  // units 0 through 63, compute_unit_mask[1] to units 64-127, etc. (At the
-  // moment, no devices should include 64 * 4 compute units anyway.) By default
+  // units 0 through 31, compute_unit_mask[1] to units 32-63, etc. (At the
+  // moment, no devices should include 32 * 4 compute units anyway.) By default
   // this will be set entirely to 1s.
-  uint64_t compute_unit_mask[COMPUTE_UNIT_MASK_ENTRIES];
+  uint32_t compute_unit_mask[COMPUTE_UNIT_MASK_ENTRIES];
 } InitializationParameters;
 
 // This holds times and metadata about a single GPU kernel's execution in a

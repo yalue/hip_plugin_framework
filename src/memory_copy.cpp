@@ -51,14 +51,8 @@ typedef struct {
 
 // Returns a single random 64-bit value.
 static uint64_t Random64(void) {
-  int i;
-  uint64_t to_return = 0;
-  // Get a random number in 16-bit chunks
-  for (i = 0; i < 4; i++) {
-    to_return = to_return << 16;
-    to_return |= rand() & 0xffff;
-  }
-  return to_return;
+  // This won't fill in all bits, but we'll do it anyway to keep things faster.
+  return (uint64_t) rand();
 }
 
 // Implements the Cleanup() function required by the plugin interface.
@@ -143,7 +137,8 @@ static int ParseAdditionalInfo(const char *arg, PluginState *state) {
 
 // Allocates host and device memory for the plugin. Returns 0 on error.
 static int AllocateMemory(PluginState *state) {
-  uint64_t i;
+  uint64_t i, count;
+  double tmp_time;
   size_t buffer_size = (state->block_count * 2) * sizeof(uint64_t);
 
   // Allocate host and device memory for block times.
@@ -157,15 +152,31 @@ static int AllocateMemory(PluginState *state) {
 
   // Initialize the memory buffers, and randomly fill the host buffer.
   buffer_size = state->buffer_size;
+
+  tmp_time = CurrentSeconds();
   if (!CheckHIPError(hipMalloc(&(state->device_buffer), buffer_size))) {
     return 0;
   }
+  tmp_time = CurrentSeconds() - tmp_time;
+  printf("Time for %f MB hipMalloc: %f seconds\n",
+    ((double) buffer_size) / (1024.0 * 1024.0), tmp_time);
+
+  tmp_time = CurrentSeconds();
   if (!CheckHIPError(hipHostMalloc(&state->host_buffer, buffer_size))) {
     return 0;
   }
-  for (i = 0; i < buffer_size / sizeof(uint64_t); i++) {
+  tmp_time = CurrentSeconds() - tmp_time;
+  printf("Time for %f MB hipHostMalloc: %f seconds\n",
+    ((double) buffer_size) / (1024.0 * 1024.0), tmp_time);
+
+  count = buffer_size / sizeof(uint64_t);
+  tmp_time = CurrentSeconds();
+  for (i = 0; i < count; i++) {
     ((uint64_t *) state->host_buffer)[i] = Random64();
   }
+  tmp_time = CurrentSeconds() - tmp_time;
+  printf("Time for randomly filling buffer: %f seconds.\n", tmp_time);
+
   return 1;
 }
 

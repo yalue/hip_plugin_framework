@@ -68,7 +68,7 @@ def get_plugin_cdf(plugin, times_key):
         if not times_key in t:
             continue
         times = t[times_key]
-        for i in range(len(times) / 2):
+        for i in range(int(len(times) / 2)):
             start_index = i * 2
             end_index = i * 2 + 1
             raw_values.append(times[end_index] - times[start_index])

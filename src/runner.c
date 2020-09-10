@@ -214,7 +214,7 @@ static void FreePluginStates(PluginState *plugin_states, int plugin_count) {
   int i;
   for (i = 0; i < plugin_count; i++) {
     fclose(plugin_states[i].output_file);
-    dlclose(plugin_states[i].library_handle);
+    //dlclose(plugin_states[i].library_handle);
   }
   memset(plugin_states, 0, plugin_count * sizeof(PluginState));
   free(plugin_states);
@@ -436,7 +436,7 @@ static int InitializeInitializationParameters(PluginState *state,
   parameters->additional_info = state->config->additional_info;
   parameters->device_id = state->shared_state->global_config->gpu_device_id;
   memcpy(parameters->compute_unit_mask, state->config->compute_unit_mask,
-    COMPUTE_UNIT_MASK_ENTRIES * sizeof(uint64_t));
+    COMPUTE_UNIT_MASK_ENTRIES * sizeof(uint32_t));
   return 1;
 }
 

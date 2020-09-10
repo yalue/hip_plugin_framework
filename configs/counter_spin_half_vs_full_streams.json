@@ -1,9 +1,11 @@
 {
   "name": "Counter spin test, streams in single process",
-  "max_iterations": 1,
+  "max_iterations": 1000,
   "max_time": 0,
   "gpu_device_id": 0,
   "use_processes": false,
+  "do_warmup": true,
+  "sync_every_iteration": true,
   "plugins": [
     {
       "filename": "./bin/counter_spin.so",
@@ -12,12 +14,7 @@
       "thread_count": 256,
       "block_count": 16000,
       "additional_info": 10000,
-      "compute_unit_mask": [
-        true, true, true, true, true, true, true, true,
-        true, true, true, true, true, true, true, true,
-        false, false, false, false, false, false, false, false,
-        false, false, false, false, false, false, false, false
-      ]
+      "compute_unit_mask": "0x00000000fffffffc"
     },
     {
       "filename": "./bin/counter_spin.so",
@@ -26,12 +23,7 @@
       "thread_count": 256,
       "block_count": 16000,
       "additional_info": 10000,
-      "comment": [
-        false, true, false, false, false, true, false, false,
-        false, true, false, false, false, true, false, false,
-        false, true, false, false, false, true, false, false,
-        false, true, false, false, false, true, false, false
-      ]
+      "compute_unit_mask": "0x0fffffffffffffff"
     }
   ]
 }

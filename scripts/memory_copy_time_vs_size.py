@@ -74,12 +74,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--competitors", default=0, type=int,
         help="The number of competing instances to run.")
+    parser.add_argument("--dynamic_subdivisions", dest="dynamic_subdivisions",
+        action="store_true", help="If set, this causes copies from both the " +
+        "measured task and competitors to be subdivided into 64 MB chunks.")
     args = parser.parse_args()
     if args.competitors < 0:
         print("The number of competitors must be positive.")
         exit(1)
 
-    for i in range(21):
-        buffer_size = 1024 * (2 ** i)
-        run_process(buffer_size, args.competitors)
+    for i in range(32):
+        # Test buffer sizes from 64 MB to 2 GB, in steps of 64 MB.
+        buffer_size = 64 * (1024 * 1024) * (i + 1)
+        run_process(buffer_size, args.competitors, args.dynamic_subdivisions)
 

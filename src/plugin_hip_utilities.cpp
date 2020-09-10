@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <hip/hip_runtime.h>
 #include "plugin_hip_utilities.h"
 
@@ -10,27 +11,22 @@ int InternalHIPErrorCheck(hipError_t result, const char *fn, const char *file,
   return 0;
 }
 
-hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint64_t *mask,
+
+
+hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint32_t *mask,
     int mask_count) {
   hipStream_t to_create;
-  hipError_t status = hipSuccess;
-  if (mask_count < 0) {
-    printf("Internal error creating HIP stream: Invalid mask count.\n");
-    return hipErrorInvalidValue;
-  }
-  status = hipStreamCreate(&to_create);
-  if (status != hipSuccess) return status;
-  if (mask_count == 0) return hipSuccess;
-#ifdef HIP_HAS_STREAM_SET_CU_MASK
-  status = hipStreamSetComputeUnitMask(to_create, mask[0]);
-  if (status != hipSuccess) {
-    // Wrap this in an error check to print the message if more errors occur.
-    CheckHIPError(hipStreamDestroy(to_create));
-    return status;
-  }
+  hipError_t result;
+  memset(&to_create, 0, sizeof(to_create));
+#ifdef __HIP__
+  // This should only run under HIP-clang under ROCm 3.6 or later.
+  result = hipExtStreamCreateWithCUMask(&to_create, mask_count, mask);
+
 #else
-  printf("Warning: Setting a CU mask isn't supported in this build of HIP.\n");
+  // nvcc or versions other than HIP-clang won't support the necessary API.
+  printf("Warning: Setting a CU mask isn't supported in this HIP version.\n");
+  result = hipStreamCreate(&to_create);
 #endif
   *stream = to_create;
-  return hipSuccess;
+  return result;
 }

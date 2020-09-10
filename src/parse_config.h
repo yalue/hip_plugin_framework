@@ -29,7 +29,7 @@ typedef struct {
   char *additional_info;
   // A bit mask where 1 bits enable the respective compute unit and 0 disables
   // them. Defaults to all 1s.
-  uint64_t compute_unit_mask[COMPUTE_UNIT_MASK_ENTRIES];
+  uint32_t compute_unit_mask[COMPUTE_UNIT_MASK_ENTRIES];
   // The maximum number of iterations for this plugin alone; will override the
   // global limit if set (0 = unlimited, negative = unset).
   int64_t max_iterations;

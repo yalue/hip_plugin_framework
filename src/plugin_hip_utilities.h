@@ -16,9 +16,9 @@ int InternalHIPErrorCheck(hipError_t result, const char *fn, const char *file,
     int line);
 
 // Creates the HIP stream and sets the compute unit mask. Returns hipSuccess on
-// success. The mask_count argument must be set to the number of 64-bit entries
+// success. The mask_count argument must be set to the number of 32-bit entries
 // in the provided mask.
-hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint64_t *mask,
+hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint32_t *mask,
     int mask_count);
 
 #ifdef __cplusplus
