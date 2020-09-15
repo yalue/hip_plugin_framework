@@ -244,9 +244,9 @@ plugin is responsible for ensuring that the buffers provided in the
 is called. They will not be freed by the caller.
 
 In general, the comments in `plugin_interface.h` provide an explanation for
-the actions that every plugin-provided function is expected to carry out.
-The existing plugins in `src/mandelbrot.cpp` and `src/timer_spin.cpp` provide
-examples of working plugin implementations.
+the actions that every plugin-provided function is expected to carry out. The
+`src/mandelbrot.cpp` file contains a well-commented example of a working plugin
+implementation.
 
 In addition to `plugin_interface.h`, `plugin_utilities.h` and
 `plugin_hip_utilities.h` define a library of utility functions that may be

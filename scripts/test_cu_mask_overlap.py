@@ -28,7 +28,10 @@ def generate_config(cu_count, competitor_cu_count, overlap_amount, total_cus):
         "thread_count": 512,
         "block_count": 9999,
         "compute_unit_mask": cu_mask,
-        "additional_info": 1000
+        "additional_info": {
+            "max_iterations": 500,
+            "image_width": 2048
+        }
     }
     competitor_config = {
         "label": "competitor",
@@ -37,13 +40,16 @@ def generate_config(cu_count, competitor_cu_count, overlap_amount, total_cus):
         "thread_count": 512,
         "block_count": 9999,
         "compute_unit_mask": competitor_cu_mask,
-        "additional_info": 1000
+        "additional_info": {
+            "max_iterations": 500,
+            "image_width": 2048
+        }
     }
     overall_config = {
         "name": "Compute Unit Overlap vs. Performance",
         "max_iterations": 100,
         "max_time": 0,
-        "gpu_device_id": 1,
+        "gpu_device_id": 0,
         "pin_cpus": True,
         "sync_every_iteration": True,
         "use_processes": True,
@@ -61,7 +67,7 @@ def run_process(cu_count, competitor_cu_count, overlap_amount, total_cus):
     process = subprocess.Popen(["./bin/runner", "-"], stdin=subprocess.PIPE)
     process.communicate(input=config)
 
-# This test was designed for the RX 570, with 32 compute units.
-for i in range(17):
-    run_process(16, 16, i, 32)
+# This test was designed for the Radeon VII, with 60 compute units.
+for i in range(31):
+    run_process(30, 30, i, 60)
 

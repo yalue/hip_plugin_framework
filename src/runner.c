@@ -196,12 +196,10 @@ static int GetDeviceInfo(int device_id, DeviceInformation *info) {
   }
   memcpy(info, buffer, sizeof(*info));
   FreeSharedBuffer(buffer, sizeof(*info));
-  /*
   if (!WIFEXITED(status)) {
     printf("The child process didn't exit normally.\n");
     return 0;
   }
-  */
   if (WEXITSTATUS(status) != EXIT_SUCCESS) {
     printf("The child process exited with an error.\n");
     return 0;
@@ -214,7 +212,9 @@ static void FreePluginStates(PluginState *plugin_states, int plugin_count) {
   int i;
   for (i = 0; i < plugin_count; i++) {
     fclose(plugin_states[i].output_file);
-    //dlclose(plugin_states[i].library_handle);
+    // Technically, it should be correct to do this, but it causes a segfault
+    // somewhere in the ROCm libraries. (last checked in ROCm 3.7.0)
+    // dlclose(plugin_states[i].library_handle);
   }
   memset(plugin_states, 0, plugin_count * sizeof(PluginState));
   free(plugin_states);

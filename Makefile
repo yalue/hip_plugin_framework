@@ -46,7 +46,7 @@ obj/mandelbrot.o: src/mandelbrot.cpp $(PLUGIN_DEPENDENCIES)
 
 bin/mandelbrot.so: obj/mandelbrot.o $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/mandelbrot.so obj/mandelbrot.o \
-		obj/plugin_utilities.o obj/plugin_hip_utilities.o
+		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
 obj/counter_spin.o: src/counter_spin.cpp $(PLUGIN_DEPENDENCIES)
 	hipcc -c $(CFLAGS) -o obj/counter_spin.o src/counter_spin.cpp
