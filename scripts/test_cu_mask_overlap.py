@@ -1,5 +1,6 @@
 # This script tests performance when compute units are shared between two
 # tasks.
+import argparse
 import json
 import subprocess
 
@@ -67,7 +68,19 @@ def run_process(cu_count, competitor_cu_count, overlap_amount, total_cus):
     process = subprocess.Popen(["./bin/runner", "-"], stdin=subprocess.PIPE)
     process.communicate(input=config)
 
-# This test was designed for the Radeon VII, with 60 compute units.
-for i in range(31):
-    run_process(30, 30, i, 60)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cu_count", type=int, default=60,
+        help="The total number of CUs on the GPU.")
+    parser.add_argument("--start_overlap_amount", type=int, default=0,
+        help="The number of CUs to overlap when first invoking the script. "+
+            "This option helps resuming the experiment, since HIP hangs all "+
+            "the time at the time I'm trying to run it...")
+    args = parser.parse_args()
+
+    cu_partition_size = args.cu_count // 2
+
+    # This test was designed for the Radeon VII, with 60 compute units.
+    for i in range(args.start_overlap_amount, cu_partition_size + 1):
+        run_process(cu_partition_size, cu_partition_size, i, args.cu_count)
 
