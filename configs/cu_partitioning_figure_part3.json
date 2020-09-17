@@ -1,0 +1,28 @@
+{
+  "comment": "This is one of five parts of an experiment that compares partitioning approaches.",
+  "comment": "This third file runs the measured task in isolation, but only on half of the CUs (striped)",
+  "name": "Partitioning approaches comparison",
+  "max_iterations": 1000,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "pin_cpus": true,
+  "sync_every_iteration": true,
+  "use_processes": true,
+  "do_warmup": true,
+  "plugins": [
+    {
+      "label": "Isolated, half CUs",
+      "log_name": "results/cu_partitioning_isolated_half_cu_striped.json",
+      "filename": "./bin/mandelbrot.so",
+      "thread_count": 512,
+      "block_count": 999999,
+      "additional_info": {
+        "max_iterations": 500,
+        "image_width": 2048
+      },
+      "comment": "This CU mask should stripe across all 60 CUs, 1010101....",
+      "comment": "Intended to run on a Radeon VII, with 60 CUs.",
+      "compute_unit_mask": "0xaaaaaaaaaaaaaaa"
+    }
+  ]
+}

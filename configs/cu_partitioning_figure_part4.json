@@ -1,0 +1,38 @@
+{
+  "comment": "This is one of five parts of an experiment that compares partitioning approaches.",
+  "comment": "This fourth file runs both the competitor partitioned to different halves of CUs, without striping.",
+  "name": "Partitioning approaches comparison",
+  "max_iterations": 1000,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "pin_cpus": true,
+  "sync_every_iteration": true,
+  "use_processes": true,
+  "do_warmup": true,
+  "plugins": [
+    {
+      "label": "vs. competitor, partitioned (unstriped)",
+      "log_name": "results/cu_partitioning_partitioned_unstriped.json",
+      "filename": "./bin/mandelbrot.so",
+      "thread_count": 512,
+      "block_count": 999999,
+      "additional_info": {
+        "max_iterations": 500,
+        "image_width": 2048
+      },
+      "compute_unit_mask": "0xfffffffc0000000"
+    },
+    {
+      "label": "competitor",
+      "log_name": "results/cu_partitioning_competitor.json",
+      "filename": "./bin/mandelbrot.so",
+      "thread_count": 512,
+      "block_count": 999999,
+      "additional_info": {
+        "max_iterations": 500,
+        "image_width": 2048
+      },
+      "compute_unit_mask": "0x00000003fffffff"
+    }
+  ]
+}

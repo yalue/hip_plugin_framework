@@ -1,0 +1,25 @@
+{
+  "comment": "This is one of five parts of an experiment that compares partitioning approaches.",
+  "comment": "This second file runs the measured task in isolation.",
+  "name": "Partitioning approaches comparison",
+  "max_iterations": 1000,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "pin_cpus": true,
+  "sync_every_iteration": true,
+  "use_processes": true,
+  "do_warmup": true,
+  "plugins": [
+    {
+      "label": "Isolated, no partitioning",
+      "log_name": "results/cu_partitioning_isolated_full.json",
+      "filename": "./bin/mandelbrot.so",
+      "thread_count": 512,
+      "block_count": 999999,
+      "additional_info": {
+        "max_iterations": 500,
+        "image_width": 2048
+      }
+    }
+  ]
+}
