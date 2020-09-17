@@ -13,24 +13,20 @@ means that this project is unable to plot which compute units blocks are
 assigned to.
 
 Some of this project may require modified versions of AMD's HIP framework or
-other ROCm components (as it is intended to support my research). Users who
-want to use the full set of features, including ones requiring non-standard
-HIP, can compile and install the modified ROCm components from
+other ROCm components (as it is intended to support my research). If any such
+modifications are needed, they should be included in
 [this repository](https://github.com/yalue/rocm_mega_repo).
 
-For now, the only non-standard HIP feature is the ability to set a compute-unit
-mask for individual streams. At the moment, the framework will simply print a
-warning and ignore compute unit masks if attempting to set one while using a
-version of the framework compiled using the unmodified, stock, version of HIP.
+As of ROCm 3.7, however, this repository should not require any non-standard
+HIP functionality.
 
 
 Basic Compilation and Usage
 ---------------------------
 
 Compiling this project requires HIP, and `hipcc` must be on your `PATH`. Only
-Linux is supported for now, and only AMD GPUs.  (Compilation will also work on
-NVIDIA, but it may require modifying the makefile.  This is a work in progress
-for me.)
+Linux is supported for now, and only AMD GPUs.  (Compilation should also work
+on NVIDIA, but is not a priority and may require modifying the makefile.)
 
 To build:
 
@@ -45,6 +41,7 @@ To test it, run:
 ```bash
 ./bin/runner configs/simple.json
 ```
+
 
 Rodinia Plugins
 ---------------
@@ -61,19 +58,13 @@ directory. Some sample configs exist for testing these plugins in `configs/`.
 For example, running `./bin/runner configs/particlefilter.json` launches a
 single instance of the `particlefilter` plugin.
 
-Known Issues
-------------
-
-The framework ends with a segfault when `use_processes` is set to `true` in a
-configuration file. This occurs when the framework attempts to clean up and
-unload plugin shared libraries, but does not affect plugin execution or
-interfere with creating output files.
 
 Configuration Files
 -------------------
 
 The configuration files specify parameters passed to each plugin along with
-some global settings for the entire framework.
+some global settings for the entire framework. See `configs/simple.json` for a
+minimal working example, using the Mandelbrot-set plugin.
 
 The layout of each configuration file is as follows:
 
@@ -250,7 +241,7 @@ implementation.
 
 In addition to `plugin_interface.h`, `plugin_utilities.h` and
 `plugin_hip_utilities.h` define a library of utility functions that may be
-shared between plugins.
+used by plugins.
 
 Plugins are invoked by the framework as follows:
 
@@ -279,11 +270,12 @@ Plugins are invoked by the framework as follows:
 Coding Style
 ------------
 
-Even though CUDA supports C++, contributions to this project should use the C
-programming language when possible. C or CUDA source code should adhere to the
+Even though HIP supports C++, contributions to this project should use the C
+programming language when possible. C or HIP source code should adhere to the
 parts of the [Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html)
 that apply to the C language.
 
 Scripts should remain in the `scripts/` directory and should be written in
 python when possible. For now, there is no explicit style guide for python
 scripts apart from trying to maintain a consistent style within each file.
+

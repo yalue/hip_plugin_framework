@@ -9,6 +9,7 @@
       "filename": "./bin/mandelbrot.so",
       "log_name": "results/mandelbrot_test.json",
       "thread_count": 256,
+      "comment": "The following block_count is ignored by the Mandelbrot plugin, but a dummy value is required by the config file.",
       "block_count": 256
     }
   ]
