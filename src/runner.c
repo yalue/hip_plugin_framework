@@ -923,7 +923,7 @@ static int RunAsProcesses(SharedState *shared_state) {
     }
 
     // We're now in a child process. Make sure to *not* return from this
-    // functioni or continue in the loop. Instead, exit with a success if
+    // function or continue in the loop. Instead, exit with a success if
     // everything went OK.
     if (!RunPlugin(plugins + i)) {
       exit(EXIT_FAILURE);
