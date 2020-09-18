@@ -899,8 +899,7 @@ static void* RunPlugin(void *data) {
 }
 
 // Runs plugin instances in separate processes. Returns 1 on success and 0 if
-// an error occurs. (Child processes may exit with a failure rather than
-// returning.)
+// an error occurs.
 static int RunAsProcesses(SharedState *shared_state) {
   PluginState *plugins = shared_state->plugins;
   int i, child_status, all_ok, plugin_count;
@@ -913,6 +912,7 @@ static int RunAsProcesses(SharedState *shared_state) {
     printf("Failed allocating space to hold PIDs.\n");
     return 0;
   }
+
   memset(pids, 0, plugin_count * sizeof(pid_t));
   for (i = 0; i < plugin_count; i++) {
     child_pid = fork();
@@ -921,13 +921,16 @@ static int RunAsProcesses(SharedState *shared_state) {
       pids[i] = child_pid;
       continue;
     }
-    // The child process will run the plugin and exit with a success if
+
+    // We're now in a child process. Make sure to *not* return from this
+    // functioni or continue in the loop. Instead, exit with a success if
     // everything went OK.
     if (!RunPlugin(plugins + i)) {
       exit(EXIT_FAILURE);
     }
     exit(EXIT_SUCCESS);
   }
+
   // As the parent, ensure that each child exited and exited with EXIT_SUCCESS.
   for (i = 0; i < plugin_count; i++) {
     waitpid(pids[i], &child_status, 0);
