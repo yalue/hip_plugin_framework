@@ -24,8 +24,10 @@ int main(int argc, char **argv) {
   printf("Found %d devices:\n", count);
   for (i = 0; i < count; i++) {
     CheckHIPError(hipGetDeviceProperties(&props, i));
-    printf("Device %d: %s, gcnArch %d, PCI Bus %d, compute mode %d\n", i,
-      props.name, props.gcnArch, props.pciBusID, props.computeMode);
+    printf("Device %d: %s, gcnArch %d, PCI Bus %d, compute mode %d, "
+      "%d CUs, %d threads per CU\n", i, props.name, props.gcnArch,
+      props.pciBusID, props.computeMode, props.multiProcessorCount,
+      props.maxThreadsPerMultiProcessor);
   }
   return 0;
 }

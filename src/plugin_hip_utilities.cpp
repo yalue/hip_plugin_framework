@@ -17,11 +17,30 @@ hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint32_t *mask,
     int mask_count) {
   hipStream_t to_create;
   hipError_t result;
+  int i;
+  int all_set = 1;
   memset(&to_create, 0, sizeof(to_create));
+
+  // If the mask is all 1's, then don't use hipExtStreamCreateWithCUMask. It
+  // has performance implications, as it will always get a new underlying HSA
+  // queue. Instead, use the default hipStreamCreate.
+  for (i = 0; i < COMPUTE_UNIT_MASK_ENTRIES; i++) {
+    if (mask[i] != 0xffffffff) {
+      all_set = 0;
+      break;
+    }
+  }
+  if (all_set) {
+    result = hipStreamCreate(&to_create);
+    *stream = to_create;
+    return result;
+  }
+
+  // We have a non-trivial CU mask, so create the stream with a CU mask if
+  // we're using a platform that supports it.
 #ifdef __HIP__
   // This should only run under HIP-clang under ROCm 3.6 or later.
   result = hipExtStreamCreateWithCUMask(&to_create, mask_count, mask);
-
 #else
   // nvcc or versions other than HIP-clang won't support the necessary API.
   printf("Warning: Setting a CU mask isn't supported in this HIP version.\n");
