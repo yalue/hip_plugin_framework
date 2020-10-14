@@ -1,0 +1,22 @@
+{
+  "name": "Vector add test",
+  "comment": "This config was just for basic testing of the vector_add plugin.",
+  "max_iterations": 100,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "use_processes": false,
+  "do_warmup": true,
+  "plugins": [
+    {
+      "filename": "./bin/vector_add.so",
+      "log_name": "results/vector_add_test.json",
+      "thread_count": 256,
+      "block_count": 1,
+      "additional_info": {
+        "comment": "The vectors will contain 16 million floats.",
+        "vector_length": 16000000,
+        "skip_copy": false
+      }
+    }
+  ]
+}
