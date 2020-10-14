@@ -145,14 +145,11 @@ static int ParseAdditionalInfo(const char *arg, PluginState *state) {
     state->skip_copy = entry->type == cJSON_True;
   }
 
-
   cJSON_Delete(root);
   root = NULL;
   entry = NULL;
   return 1;
 }
-
-
 
 static void* Initialize(InitializationParameters *params) {
   PluginState *state = NULL;
