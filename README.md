@@ -182,7 +182,8 @@ numbers of seconds. The format of the log file is:
       "copy_out_times": [
         <The CPU time when the copy_out function was called>,
         <The CPU time after the copy_out function returned>
-      ]
+      ],
+      "cpu_core": <The current CPU core being used>
     },
     {
       "kernel_name": <The name of this particular kernel. May be omitted.>,
@@ -195,8 +196,7 @@ numbers of seconds. The format of the log file is:
         be set to 0 if hipStreamSynchronize isn't called for this kernel.>],
       "block_times": [<Start time>, <End time>, ..., <This may be empty if the
         plugin doesn't record block times. This contains block start and end
-        times in *millions of GPU cycles*, not seconds.>],
-      "cpu_core": <The current CPU core being used>
+        times in *millions of GPU cycles*, not seconds.>]
     },
     ...
   ]

@@ -11,8 +11,6 @@ int InternalHIPErrorCheck(hipError_t result, const char *fn, const char *file,
   return 0;
 }
 
-
-
 hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint32_t *mask,
     int mask_count) {
   hipStream_t to_create;

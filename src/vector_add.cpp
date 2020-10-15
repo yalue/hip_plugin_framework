@@ -1,12 +1,15 @@
 // This plugin allocates two vectors of floating-point numbers.
-// The additional_info must be a JSON object containing at least one key,
-// "vector_length", that must be a positive number specifying the number of
-// floating-point values in the vectors to add. Additionally, the
-// additional_info object may contain an "skip_copy" key, which is a boolean.
-// If not provided, it defaults to false. If it's provided and set to true,
-// then the plugin will *not* copy the input and output vectors at every
-// iteration. Instead, it will copy the input vectors only once, during
-// initialization, and never copy the output vector to host memory.
+// The additional_info must be a JSON object with the following keys:
+//
+//  - "vector_length": The number of floating-point values in the two vectors
+//    to add.
+//
+// - "skip_copy": A boolean. Optional, defaults to false. If it's set to true,
+//   then the "copy_in" and "copy_out" phases will not copy the vector data to
+//   or from the GPU. Instead, the input vectors will only be copied once,
+//   during the initialize function, and output data will never be copied. May
+//   be useful if you want a simple workload without so many memory transfers.
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

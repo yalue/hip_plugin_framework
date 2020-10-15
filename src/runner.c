@@ -582,8 +582,12 @@ static int WriteCPUTimesToOutput(PluginState *state, CPUTimes *t) {
     return 0;
   }
   // The total CPU time.
-  if (fprintf(output, "\"cpu_times\": [%.9f,%.9f]}", t->copy_in_start,
+  if (fprintf(output, "\"cpu_times\": [%.9f,%.9f]", t->copy_in_start,
     t->copy_out_end) < 0) {
+    return 0;
+  }
+  // Print the CPU core as a sanity check.
+  if (fprintf(output, ", \"cpu_core\": %d}", sched_getcpu()) < 0) {
     return 0;
   }
   return 1;
@@ -695,10 +699,7 @@ static int WriteTimesToOutput(PluginState *state, TimingInformation *times) {
       return 0;
     }
     if (!WriteBlockTimes(state, kernel_times)) return 0;
-
-    // We're done printing information about this kernel, print the CPU core as
-    // a sanity check.
-    if (fprintf(output, ", \"cpu_core\": %d}", sched_getcpu()) < 0) {
+    if (fprintf(output, "}") < 0) {
       return 0;
     }
   }

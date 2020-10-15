@@ -11,7 +11,8 @@ all: directories plugins bin/runner bin/hip_host_utilities.so bin/list_devices \
 	bin/test_clock
 
 plugins: directories bin/mandelbrot.so bin/counter_spin.so bin/timer_spin.so \
-	bin/random_walk.so bin/huge_kernels.so bin/memory_copy.so bin/vector_add.so
+	bin/random_walk.so bin/huge_kernels.so bin/memory_copy.so \
+	bin/vector_add.so bin/dummy_streams.so
 
 rodinia_plugins: directories obj/cJSON.o obj/plugin_utilities.o \
 	obj/plugin_hip_utilities.o
@@ -88,6 +89,13 @@ obj/vector_add.o: src/vector_add.cpp $(PLUGIN_DEPENDENCIES)
 
 bin/vector_add.so: obj/vector_add.o $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/vector_add.so obj/vector_add.o \
+		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
+
+obj/dummy_streams.o: src/dummy_streams.cpp $(PLUGIN_DEPENDENCIES)
+	hipcc -c $(CFLAGS) -o obj/dummy_streams.o src/dummy_streams.cpp
+
+bin/dummy_streams.so: obj/dummy_streams.o $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/dummy_streams.so obj/dummy_streams.o \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
 bin/hip_host_utilities.so: src/hip_host_utilities.cpp src/plugin_interface.h
