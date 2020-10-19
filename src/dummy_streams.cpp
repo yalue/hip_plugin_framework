@@ -83,7 +83,7 @@ static void* Initialize(InitializationParameters *params) {
   uint32_t cu_mask;
   int i;
   if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
-  if (!CheckHIPError(hipSetDeviceFlags(hipDeviceScheduleYield))) return NULL;
+  if (!CheckHIPError(hipSetDeviceFlags(PLUGIN_DEVICE_FLAGS))) return NULL;
   state = (PluginState *) calloc(sizeof(*state), 1);
   if (!state) {
     printf("Failed allocating plugin state.\n");

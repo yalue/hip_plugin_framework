@@ -159,7 +159,7 @@ static void* Initialize(InitializationParameters *params) {
   int block_count, thread_count;
   uint64_t vector_length;
   if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
-  if (!CheckHIPError(hipSetDeviceFlags(hipDeviceScheduleYield))) return NULL;
+  if (!CheckHIPError(hipSetDeviceFlags(PLUGIN_DEVICE_FLAGS))) return NULL;
   state = (PluginState *) calloc(sizeof(*state), 1);
   if (!state) {
     printf("Failed allocating plugin state.\n");

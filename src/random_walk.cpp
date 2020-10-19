@@ -171,7 +171,7 @@ __global__ void InitialWalk(uint64_t *walk_buffer, uint64_t buffer_length,
 static void* Initialize(InitializationParameters *params) {
   PluginState *state = NULL;
   if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
-  if (!CheckHIPError(hipSetDeviceFlags(hipDeviceScheduleYield))) return NULL;
+  if (!CheckHIPError(hipSetDeviceFlags(PLUGIN_DEVICE_FLAGS))) return NULL;
   state = (PluginState *) malloc(sizeof(*state));
   if (!state) {
     printf("Failed allocating plugin state.\n");

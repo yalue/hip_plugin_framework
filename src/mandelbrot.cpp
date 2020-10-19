@@ -176,7 +176,7 @@ static void* Initialize(InitializationParameters *params) {
   PluginState *state = NULL;
   FractalDimensions *dimensions = NULL;
   if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
-  if (!CheckHIPError(hipSetDeviceFlags(hipDeviceScheduleYield))) return NULL;
+  if (!CheckHIPError(hipSetDeviceFlags(PLUGIN_DEVICE_FLAGS))) return NULL;
 
   // Allocate memory to hold state for this instance of the plugin.
   state = (PluginState *) malloc(sizeof(*state));

@@ -8,6 +8,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 // This macro takes a hipError_t value and prints the error value and returns 0
 // if the value is not hipSuccess. Returns 1 otherwise.
 #define CheckHIPError(val) (InternalHIPErrorCheck((val), #val, __FILE__, __LINE__))
@@ -20,6 +21,9 @@ int InternalHIPErrorCheck(hipError_t result, const char *fn, const char *file,
 // in the provided mask.
 hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint32_t *mask,
     int mask_count);
+
+// Plugins are expected to pass this value to hipSetDeviceFlags.
+#define PLUGIN_DEVICE_FLAGS (hipDeviceScheduleYield)
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -72,7 +72,7 @@ static int AllocateMemory(PluginState *state) {
 static void* Initialize(InitializationParameters *params) {
   PluginState *state = NULL;
   if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
-  if (!CheckHIPError(hipSetDeviceFlags(hipDeviceScheduleYield))) return NULL;
+  if (!CheckHIPError(hipSetDeviceFlags(PLUGIN_DEVICE_FLAGS))) return NULL;
   state = (PluginState *) malloc(sizeof(*state));
   if (!state) {
     printf("Failed allocating plugin state.\n");
