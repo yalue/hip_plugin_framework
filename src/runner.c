@@ -8,7 +8,6 @@
 // config file from stdin.
 #define _GNU_SOURCE
 #include <dlfcn.h>
-#include <libgen.h>
 #include <errno.h>
 #include <sched.h>
 #include <pthread.h>
@@ -130,6 +129,34 @@ static void FreeSharedBuffer(void *buffer, size_t size) {
   munmap(buffer, size);
 }
 
+// Modifies the given path to replace the laste "/" with a null terminator.
+// Intended to cut the "filename" out of a full path. Returns 1 on success, and
+// zero if any error occurs (such as the path already being a directory).
+static int DirName(char *path) {
+  char *last_slash = NULL;
+  char *cur = path;
+  char c;
+  if (!cur) {
+    printf("DirName called on a NULL path.\n");
+    return 0;
+  }
+  c = *cur;
+  while (c != 0) {
+    if (c == 0) break;
+    if (c == '/') last_slash = cur;
+    cur++;
+    c = *cur;
+  }
+  // Replace the last slash with a null terminator, but only if it's not
+  // already the last character in the string.
+  if (last_slash[1] == 0) {
+    printf("Can't get DirName: %s is already a directory.\n", path);
+    return 0;
+  }
+  *last_slash = 0;
+  return 1;
+}
+
 // Fills in the HIP device information struct, jumping through a huge number of
 // hoops to avoid loading HIP in the parent process. Returns 0 on error.
 static int GetDeviceInfo(int device_id, DeviceInformation *info) {
@@ -153,24 +180,33 @@ static int GetDeviceInfo(int device_id, DeviceInformation *info) {
       strerror(errno));
     return 0;
   }
+
   if (pid == 0) {
     // Load the library in the child process only! Afterwards, look up and call
     // the GetDeviceInformation function, filling in the shared buffer.
+    memset(exe_path, 0, sizeof(exe_path));
+    memset(lib_path, 0, sizeof(lib_path));
     if (readlink("/proc/self/exe", exe_path, sizeof(exe_path)) <= 0) {
       printf("Failed reading the path of the host process executable: %s\n",
         strerror(errno));
       exit(EXIT_FAILURE);
     }
+
+    // We get the path to the hip_host_utilities.so library relative to the
+    // directory containing the main "runner" executable.
+    if (!DirName(exe_path)) exit(EXIT_FAILURE);
     if (snprintf(lib_path, sizeof(lib_path), "%s/hip_host_utilities.so",
-      dirname(exe_path)) >= sizeof(lib_path)) {
+      exe_path) >= sizeof(lib_path)) {
       printf("The path to hip_host_utilities.so was too long.\n");
       exit(EXIT_FAILURE);
     }
-    library_handle = dlopen(lib_path, RTLD_NOW);
+    library_handle = dlopen(lib_path, RTLD_LAZY);
     if (!library_handle) {
       printf("Failed loading library %s: %s\n", lib_path, dlerror());
       exit(EXIT_FAILURE);
     }
+
+    // Call the GetDeviceInfoFunction in the child process.
     info_function = (GetDeviceInfoFunction) dlsym(library_handle,
       "GetDeviceInformation");
     if (!info_function) {
@@ -187,6 +223,7 @@ static int GetDeviceInfo(int device_id, DeviceInformation *info) {
     dlclose(library_handle);
     exit(EXIT_SUCCESS);
   }
+
   // The parent will wait for the child to finish, then copy the contents from
   // the shared buffer.
   if (wait(&status) < 0) {
@@ -903,10 +940,11 @@ static void* RunPlugin(void *data) {
 // an error occurs.
 static int RunAsProcesses(SharedState *shared_state) {
   PluginState *plugins = shared_state->plugins;
-  int i, child_status, all_ok, plugin_count;
+  int i, created_ok, child_status, all_ok, plugin_count;
   pid_t *pids = NULL;
   pid_t child_pid = 0;
   all_ok = 1;
+  created_ok = 0;
   plugin_count = shared_state->global_config->plugin_count;
   pids = (pid_t *) malloc(plugin_count * sizeof(pid_t));
   if (!pids) {
@@ -918,9 +956,17 @@ static int RunAsProcesses(SharedState *shared_state) {
   for (i = 0; i < plugin_count; i++) {
     child_pid = fork();
     // The parent process can keep generating child processes.
-    if (child_pid != 0) {
+    if (child_pid > 0) {
       pids[i] = child_pid;
+      // If we failed forking a child, we still want to wait for the children
+      // that we successfully created to finish, so keep track of the number of
+      // successful children in created_ok.
+      created_ok++;
       continue;
+    } else if (child_pid != 0) {
+      printf("Failed creating child process: %s\n", strerror(errno));
+      all_ok = 0;
+      break;
     }
 
     // We're now in a child process. Make sure to *not* return from this
@@ -932,8 +978,9 @@ static int RunAsProcesses(SharedState *shared_state) {
     exit(EXIT_SUCCESS);
   }
 
-  // As the parent, ensure that each child exited and exited with EXIT_SUCCESS.
-  for (i = 0; i < plugin_count; i++) {
+  // As the parent, ensure that each child that was created exited and exited
+  // with EXIT_SUCCESS.
+  for (i = 0; i < created_ok; i++) {
     waitpid(pids[i], &child_status, 0);
     if (!WIFEXITED(child_status)) {
       printf("A child process ended without exiting properly.\n");
@@ -996,6 +1043,7 @@ int main(int argc, char **argv) {
     printf("Usage: %s <path to JSON config file>\n", argv[0]);
     return 1;
   }
+
   // Read the config file, then set up the top-level SharedState struct.
   config_content = (char *) GetConfigFileContent(argv[1]);
   if (!config_content) return 1;
@@ -1018,6 +1066,9 @@ int main(int argc, char **argv) {
     return 1;
   }
   printf("Plugin configuration loaded.\n");
+
+  // Create the barrier-synchronization stuff, used to ensure that plugins
+  // start running at the same time, after everything's initialized.
   if (!BarrierCreate(&(shared_state->barrier),
     shared_state->global_config->plugin_count)) {
     printf("Failed initializing synchronization barrier.\n");
@@ -1025,6 +1076,10 @@ int main(int argc, char **argv) {
     return 1;
   }
   shared_state->barrier_created = 1;
+
+  // Gather information about the GPU. ROCm doesn't like child processes
+  // re-initializing the GPU, so this will temporarily spin up a child process
+  // in order to load ROCm stuff and read the info.
   if (!GetDeviceInfo(shared_state->global_config->gpu_device_id,
     &(shared_state->device_info))) {
     printf("Failed reading device information.\n");
@@ -1034,6 +1089,10 @@ int main(int argc, char **argv) {
   printf("Running on device %d: %s\n",
     shared_state->global_config->gpu_device_id,
     shared_state->device_info.device_name);
+  fflush(stdout);
+
+  // Finally, run the plugins in either separate pthreads or processes,
+  // depending on the setting in the config.
   shared_state->starting_seconds = CurrentSeconds();
   if (shared_state->global_config->use_processes) {
     result = RunAsProcesses(shared_state);
