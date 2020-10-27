@@ -58,6 +58,7 @@ static int VerifyGlobalConfigKeys(cJSON *main_config) {
     "pin_cpus",
     "plugins",
     "sync_every_iteration",
+    "sync_initialization",
     "do_warmup",
     "omit_block_times",
     "comment",
@@ -381,7 +382,6 @@ GlobalConfiguration* ParseConfiguration(const char *config) {
   GlobalConfiguration *to_return = NULL;
   cJSON *root = NULL;
   cJSON *entry = NULL;
-  int tmp;
   to_return = (GlobalConfiguration *) malloc(sizeof(*to_return));
   if (!to_return) {
     printf("Failed allocating config memory.\n");
@@ -397,6 +397,7 @@ GlobalConfiguration* ParseConfiguration(const char *config) {
   if (!VerifyGlobalConfigKeys(root->child)) {
     goto ErrorCleanup;
   }
+
   // Begin reading the global settings values.
   entry = cJSON_GetObjectItem(root, "max_iterations");
   if (!entry || (entry->type != cJSON_Number)) {
@@ -411,29 +412,32 @@ GlobalConfiguration* ParseConfiguration(const char *config) {
     printf("Invalid(negative) default max_iterations in config.\n");
     goto ErrorCleanup;
   }
+
   entry = cJSON_GetObjectItem(root, "max_time");
   if (!entry || (entry->type != cJSON_Number)) {
     printf("Missing/invalid default max_time in config.\n");
     goto ErrorCleanup;
   }
   to_return->max_time = entry->valuedouble;
+
   entry = cJSON_GetObjectItem(root, "use_processes");
   if (entry) {
-    tmp = entry->type;
-    if ((tmp != cJSON_True) && (tmp != cJSON_False)) {
+    if (!IsCJSONBoolean(entry)) {
       printf("Invalid use_processes setting in config.\n");
       goto ErrorCleanup;
     }
-    to_return->use_processes = tmp == cJSON_True;
+    to_return->use_processes = entry->type == cJSON_True;
   } else {
     to_return->use_processes = DEFAULT_USE_PROCESSES;
   }
+
   entry = cJSON_GetObjectItem(root, "gpu_device_id");
   if (!entry || (entry->type != cJSON_Number)) {
     printf("Missing/invalid GPU device ID in config.\n");
     goto ErrorCleanup;
   }
   to_return->gpu_device_id = entry->valueint;
+
   // Any string entries will be copied--we have to assume that freeing cJSON
   // and/or the config content will free them otherwise.
   entry = cJSON_GetObjectItem(root, "name");
@@ -446,9 +450,10 @@ GlobalConfiguration* ParseConfiguration(const char *config) {
     printf("Failed allocating memory for the scenario name.\n");
     goto ErrorCleanup;
   }
-  entry = cJSON_GetObjectItem(root, "base_result_directory");
+
   // Like the scenario_name entry, the result directory must also be copied.
   // However, it is optional so we'll copy the default if it's not present.
+  entry = cJSON_GetObjectItem(root, "base_result_directory");
   if (entry) {
     if (entry->type != cJSON_String) {
       printf("Invalid base_result_directory in config.\n");
@@ -462,54 +467,66 @@ GlobalConfiguration* ParseConfiguration(const char *config) {
     printf("Failed allocating memory for result path.\n");
     goto ErrorCleanup;
   }
+
   // The pin_cpus setting defaults to 0 (false)
   entry  = cJSON_GetObjectItem(root, "pin_cpus");
   if (entry) {
-    tmp = entry->type;
-    if ((tmp != cJSON_True) && (tmp != cJSON_False)) {
+    if (!IsCJSONBoolean(entry)) {
       printf("Invalid pin_cpus setting in config.\n");
       goto ErrorCleanup;
     }
-    to_return->pin_cpus = tmp == cJSON_True;
+    to_return->pin_cpus = entry->type == cJSON_True;
   } else {
     to_return->pin_cpus = 0;
   }
+
   // The sync_every_iteration setting defaults to 0 (false). This MUST be
   // parsed before checking plugin-specific configs, to ensure that no plugin
   // has a specific iteration count while sync_every_iteration is true.
   entry = cJSON_GetObjectItem(root, "sync_every_iteration");
   if (entry) {
-    tmp = entry->type;
-    if ((tmp != cJSON_True) && (tmp != cJSON_False)) {
+    if (!IsCJSONBoolean(entry)) {
       printf("Invalid sync_every_iteration setting in config.\n");
       goto ErrorCleanup;
     }
-    to_return->sync_every_iteration = tmp == cJSON_True;
+    to_return->sync_every_iteration = entry->type == cJSON_True;
   } else {
     to_return->sync_every_iteration = 0;
   }
+
+  entry = cJSON_GetObjectItem(root, "sync_initialization");
+  if (entry) {
+    if (!IsCJSONBoolean(entry)) {
+      printf("Invalid sync_initialization setting in config.\n");
+      goto ErrorCleanup;
+    }
+    to_return->sync_initialization = entry->type == cJSON_True;
+  } else {
+    to_return->sync_initialization = 0;
+  }
+
   entry = cJSON_GetObjectItem(root, "do_warmup");
   if (entry) {
-    tmp = entry->type;
-    if ((tmp != cJSON_True) && (tmp != cJSON_False)) {
+    if (!IsCJSONBoolean(entry)) {
       printf("Invalid do_warmup setting in config.\n");
       goto ErrorCleanup;
     }
-    to_return->do_warmup = tmp == cJSON_True;
+    to_return->do_warmup = entry->type == cJSON_True;
   } else {
     to_return->do_warmup = 0;
   }
+
   entry = cJSON_GetObjectItem(root, "omit_block_times");
   if (entry) {
-    tmp = entry->type;
-    if ((tmp != cJSON_True) && (tmp != cJSON_False)) {
+    if (!IsCJSONBoolean(entry)) {
       printf("Invalid omit_block_times setting in config.\n");
       goto ErrorCleanup;
     }
-    to_return->omit_block_times = tmp == cJSON_True;
+    to_return->omit_block_times = entry->type == cJSON_True;
   } else {
     to_return->omit_block_times = 0;
   }
+
   // Finally, parse the plugin list. Ensure that we've obtained a valid JSON
   // array for the plugins before calling ParsePluginList.
   entry = cJSON_GetObjectItem(root, "plugins");

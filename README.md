@@ -94,6 +94,8 @@ The layout of each configuration file is as follows:
     iterations of each plugins start only when all plugins have completed their
     previous iteration. By default, each plugin only waits for its own previous
     iteration to complete.>,
+  "sync_initialization": <Boolean. Optional, defaults to false. If true,
+    forces each plugin to initialize one at a time (in arbitrary order).>,
   "omit_block_times": <Boolean. Optional, defaults to false. If true, block
     times will not be listed in results JSON files. Instead, the block_times
     field will always be set to an empty array. This can save time and space

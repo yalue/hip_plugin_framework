@@ -20,7 +20,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
-#include "barrier_wait.h"
+#include "multiprocess_sync.h"
 #include "parse_config.h"
 #include "plugin_interface.h"
 #include "plugin_utilities.h"
@@ -47,8 +47,9 @@ typedef struct {
   // This is used to force all threads or processes to wait until all are at
   // the same point in execution (e.g. after initialization).
   ProcessBarrier barrier;
-  // This will be nonzero if the barrier has been successfully initialized.
-  int barrier_created;
+  // This is used to force only one of many threads or processes to run at a
+  // time. Currently only used if sync_initialization is set to true.
+  ProcessMutex mutex;
   // A list of structs holding data for each individual plugin.
   struct PluginState_ *plugins;
   // Information about the HIP device that the plugins will use.
@@ -260,9 +261,8 @@ static void FreePluginStates(PluginState *plugin_states, int plugin_count) {
 // Frees the SharedState structure, and cleans up any resources it refers to.
 // This is safe to call even if the state was only partially initialized.
 static void Cleanup(SharedState *state) {
-  if (state->barrier_created) {
-    BarrierDestroy(&(state->barrier));
-  }
+  BarrierDestroy(&(state->barrier));
+  MutexDestroy(&(state->mutex));
   if (state->plugins) {
     FreePluginStates(state->plugins, state->global_config->plugin_count);
   }
@@ -374,13 +374,11 @@ static int CreatePluginStates(SharedState *shared_state) {
   PluginState *new_list = NULL;
   GlobalConfiguration *config = shared_state->global_config;
   cpu_set_t cpu_set;
-  new_list = (PluginState *) malloc(config->plugin_count *
-    sizeof(PluginState));
+  new_list = (PluginState *) calloc(config->plugin_count, sizeof(PluginState));
   if (!new_list) {
     printf("Failed allocating plugin states array.\n");
     return 0;
   }
-  memset(new_list, 0, config->plugin_count * sizeof(PluginState));
   // This CPU count shouldn't be the number of available CPUs, but simply the
   // number at which our cyclic CPU core assignment rolls over.
   cpu_count = sysconf(_SC_NPROCESSORS_CONF);
@@ -817,11 +815,15 @@ static void* RunPlugin(void *data) {
   int64_t max_iterations;
   double start_time, time_limit;
   PluginState *state = (PluginState *) data;
+  ProcessMutex *mutex = &(state->shared_state->mutex);
   ProcessBarrier *barrier = &(state->shared_state->barrier);
   int barrier_local_sense = 0;
+  int sync_initialization =
+    state->shared_state->global_config->sync_initialization;
   TimingInformation timing_info;
   void *user_data = NULL;
   const char *name;
+
   if (!LoadPluginLibrary(state)) {
     printf("Failed loading a plugin's shared library file.\n");
     return NULL;
@@ -838,6 +840,14 @@ static void* RunPlugin(void *data) {
     return NULL;
   }
   start_time = CurrentSeconds();
+
+  // Acquire the mutex if we're supposed to sync during initialization.
+  if (sync_initialization) {
+    if (!MutexAcquire(mutex)) {
+      printf("Failed acquiring initialization mutex.\n");
+      return NULL;
+    }
+  }
   user_data = state->functions.initialize(&initialization_parameters);
   if (!user_data) {
     printf("Failed initializing instance of %s.\n", name);
@@ -854,6 +864,9 @@ static void* RunPlugin(void *data) {
       return NULL;
     }
   }
+  // Release the mutex if we acquired it earlier.
+  if (sync_initialization) MutexRelease(mutex);
+
   printf("Plugin %s initialized in %f seconds.\n", name, CurrentSeconds() -
     start_time);
   fflush(stdout);
@@ -946,13 +959,12 @@ static int RunAsProcesses(SharedState *shared_state) {
   all_ok = 1;
   created_ok = 0;
   plugin_count = shared_state->global_config->plugin_count;
-  pids = (pid_t *) malloc(plugin_count * sizeof(pid_t));
+  pids = (pid_t *) calloc(plugin_count, sizeof(pid_t));
   if (!pids) {
     printf("Failed allocating space to hold PIDs.\n");
     return 0;
   }
 
-  memset(pids, 0, plugin_count * sizeof(pid_t));
   for (i = 0; i < plugin_count; i++) {
     child_pid = fork();
     // The parent process can keep generating child processes.
@@ -1002,12 +1014,11 @@ static int RunAsThreads(SharedState *shared_state) {
   int i, result, to_return, plugin_count;
   void *thread_result;
   plugin_count = shared_state->global_config->plugin_count;
-  threads = (pthread_t *) malloc(plugin_count * sizeof(pthread_t));
+  threads = (pthread_t *) calloc(plugin_count, sizeof(pthread_t));
   if (!threads) {
     printf("Failed allocating space to hold thread IDs.\n");
     return 0;
   }
-  memset(threads, 0, plugin_count * sizeof(pthread_t));
   to_return = 1;
   for (i = 0; i < plugin_count; i++) {
     result = pthread_create(threads + i, NULL, RunPlugin, plugins + i);
@@ -1047,12 +1058,11 @@ int main(int argc, char **argv) {
   // Read the config file, then set up the top-level SharedState struct.
   config_content = (char *) GetConfigFileContent(argv[1]);
   if (!config_content) return 1;
-  shared_state = (SharedState *) malloc(sizeof(*shared_state));
+  shared_state = (SharedState *) calloc(1, sizeof(*shared_state));
   if (!shared_state) {
     printf("Failed allocating shared state buffer.\n");
     return 1;
   }
-  memset(shared_state, 0, sizeof(*shared_state));
   shared_state->global_config = ParseConfiguration(config_content);
   if (!shared_state->global_config) {
     Cleanup(shared_state);
@@ -1075,7 +1085,14 @@ int main(int argc, char **argv) {
     Cleanup(shared_state);
     return 1;
   }
-  shared_state->barrier_created = 1;
+
+  // Create the mutex, which may be used to force plugins to take turns
+  // initializing.
+  if (!MutexCreate(&(shared_state->mutex))) {
+    printf("Failed initializing mutex.\n");
+    Cleanup(shared_state);
+    return 1;
+  }
 
   // Gather information about the GPU. ROCm doesn't like child processes
   // re-initializing the GPU, so this will temporarily spin up a child process

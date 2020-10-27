@@ -31,8 +31,8 @@ obj/runner.o: src/runner.c src/plugin_interface.h
 obj/parse_config.o: src/parse_config.c src/parse_config.h
 	gcc -c $(CFLAGS) -o obj/parse_config.o src/parse_config.c
 
-obj/barrier_wait.o: src/barrier_wait.c src/barrier_wait.h
-	gcc -c $(CFLAGS) -o obj/barrier_wait.o src/barrier_wait.c
+obj/multiprocess_sync.o: src/multiprocess_sync.c src/multiprocess_sync.h
+	gcc -c $(CFLAGS) -o obj/multiprocess_sync.o src/multiprocess_sync.c
 
 obj/plugin_hip_utilities.o: src/plugin_hip_utilities.cpp \
 	src/plugin_hip_utilities.h
@@ -102,9 +102,9 @@ bin/hip_host_utilities.so: src/hip_host_utilities.cpp src/plugin_interface.h
 	hipcc --shared $(CFLAGS) -o bin/hip_host_utilities.so \
 		src/hip_host_utilities.cpp
 
-bin/runner: obj/runner.o obj/cJSON.o obj/parse_config.o obj/barrier_wait.o
+bin/runner: obj/runner.o obj/cJSON.o obj/parse_config.o obj/multiprocess_sync.o
 	gcc $(CFLAGS) -o bin/runner obj/runner.o obj/cJSON.o obj/parse_config.o \
-		obj/barrier_wait.o obj/plugin_utilities.o -ldl -lpthread
+		obj/multiprocess_sync.o obj/plugin_utilities.o -ldl -lpthread
 
 bin/list_devices: src/list_devices.cpp
 	hipcc -o bin/list_devices $(CFLAGS) src/list_devices.cpp

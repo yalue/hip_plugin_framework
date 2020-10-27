@@ -69,6 +69,9 @@ typedef struct {
   // iterations complete. If 1, then every plugin starts each iteration only
   // after the previous iteration of every plugin has completed.
   int sync_every_iteration;
+  // IF zero, allow all processes to initialize asynchronously. Otherwise,
+  // require each task to hold a mutex while initializing and warming up.
+  int sync_initialization;
   // If 1, then an additional copy-in, execute, copy-out cycle will be carried
   // out during initialization. The results from this first iteration will not
   // be included in the final log. This can be used as a warm-up pass to ensure

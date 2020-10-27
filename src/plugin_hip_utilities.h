@@ -23,7 +23,7 @@ hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint32_t *mask,
     int mask_count);
 
 // Plugins are expected to pass this value to hipSetDeviceFlags.
-#define PLUGIN_DEVICE_FLAGS (hipDeviceScheduleYield)
+#define PLUGIN_DEVICE_FLAGS (hipDeviceScheduleAuto)
 
 #ifdef __cplusplus
 }  // extern "C"

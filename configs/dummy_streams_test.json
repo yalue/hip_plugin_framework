@@ -12,10 +12,12 @@
       "log_name": "results/dummy_streams_test.json",
       "thread_count": 1,
       "block_count": 1,
+      "compute_unit_mask": "0xdeadbeef",
       "additional_info": {
         "comment": "Create 32 streams, with (hopefully) 32 HSA queues.",
         "comment": "The 'threshold' here seems to be 24 queues before the AMDKFD driver prints a warning.",
-        "stream_count": 32
+        "stream_count": 32,
+        "use_cu_mask": true
       }
     }
   ]

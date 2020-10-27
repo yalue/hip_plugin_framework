@@ -22,7 +22,7 @@ hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint32_t *mask,
   // If the mask is all 1's, then don't use hipExtStreamCreateWithCUMask. It
   // has performance implications, as it will always get a new underlying HSA
   // queue. Instead, use the default hipStreamCreate.
-  for (i = 0; i < COMPUTE_UNIT_MASK_ENTRIES; i++) {
+  for (i = 0; i < mask_count; i++) {
     if (mask[i] != 0xffffffff) {
       all_set = 0;
       break;
