@@ -94,8 +94,6 @@ The layout of each configuration file is as follows:
     iterations of each plugins start only when all plugins have completed their
     previous iteration. By default, each plugin only waits for its own previous
     iteration to complete.>,
-  "sync_initialization": <Boolean. Optional, defaults to false. If true,
-    forces each plugin to initialize one at a time (in arbitrary order).>,
   "omit_block_times": <Boolean. Optional, defaults to false. If true, block
     times will not be listed in results JSON files. Instead, the block_times
     field will always be set to an empty array. This can save time and space
@@ -111,7 +109,7 @@ The layout of each configuration file is as follows:
         doesn't start with '/', it will be relative to base_result_directory.
         This can be /dev/null to throw away logs.>,
       "label:": <String. Optional. A label or name for this specific plugin, to
-      be copied to its output file.>,
+        be copied to its output file.>,
       "thread_count": <Number. Required, but may be ignored. The number of HIP
         threads that each block of this plugin should use.>,
       "block_count": <Number. Required, but may be ignored. The number of HIP
@@ -124,8 +122,12 @@ The layout of each configuration file is as follows:
       "max_time": <Number. Optional. If specified, overrides the default
         max_time for this plugin alone. 0 = unlimited.>,
       "release_time": <Number. Optional. If set, this plugin will sleep for the
-      given number of seconds (between initialization and the start of the
-      first iteration) before beginning execution.>,
+        given number of seconds (between initialization and the start of the
+        first iteration) before beginning execution.>,
+      "initialization_delay": <Number. Optional. If set, the framework will
+        sleep for the given number of seconds before calling the plugin's
+        initialization function. Intended to be used as a crude mechanism for
+        enforcing initialization order.>,
       "cpu_core": <Number. Optional. If specified, and pin_cpus is false, the
         system will attempt to pin this plugin onto the given CPU core.>
       "compute_unit_mask": <Optional. Can be an array of booleans, or a string

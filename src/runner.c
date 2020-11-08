@@ -47,9 +47,6 @@ typedef struct {
   // This is used to force all threads or processes to wait until all are at
   // the same point in execution (e.g. after initialization).
   ProcessBarrier barrier;
-  // This is used to force only one of many threads or processes to run at a
-  // time. Currently only used if sync_initialization is set to true.
-  ProcessMutex mutex;
   // A list of structs holding data for each individual plugin.
   struct PluginState_ *plugins;
   // Information about the HIP device that the plugins will use.
@@ -58,6 +55,8 @@ typedef struct {
 
 // Holds configuration data specific to a given plugin.
 typedef struct PluginState_ {
+  // The index of this plugin instance in the overall config's "plugins" list.
+  int plugin_index;
   // A reference to the PluginConfiguration for this plugin. Do not free this,
   // it will be freed when cleaning up the global_config object in SharedState.
   PluginConfiguration *config;
@@ -112,22 +111,6 @@ static int SetBufferSize(void **buffer, size_t new_size) {
 static pid_t GetThreadID(void) {
   pid_t to_return = syscall(SYS_gettid);
   return to_return;
-}
-
-// Allocates a private shared memory buffer containing the given number of
-// bytes. Can be freed by using FreeSharedBuffer. Returns NULL on error.
-// Initializes the buffer to contain 0.
-static void* AllocateSharedBuffer(size_t size) {
-  void *to_return = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS |
-    MAP_SHARED, -1, 0);
-  if (to_return == MAP_FAILED) return NULL;
-  memset(to_return, 0, size);
-  return to_return;
-}
-
-// Frees a shared buffer returned by AllocateSharedBuffer.
-static void FreeSharedBuffer(void *buffer, size_t size) {
-  munmap(buffer, size);
 }
 
 // Modifies the given path to replace the laste "/" with a null terminator.
@@ -262,7 +245,6 @@ static void FreePluginStates(PluginState *plugin_states, int plugin_count) {
 // This is safe to call even if the state was only partially initialized.
 static void Cleanup(SharedState *state) {
   BarrierDestroy(&(state->barrier));
-  MutexDestroy(&(state->mutex));
   if (state->plugins) {
     FreePluginStates(state->plugins, state->global_config->plugin_count);
   }
@@ -374,11 +356,13 @@ static int CreatePluginStates(SharedState *shared_state) {
   PluginState *new_list = NULL;
   GlobalConfiguration *config = shared_state->global_config;
   cpu_set_t cpu_set;
+
   new_list = (PluginState *) calloc(config->plugin_count, sizeof(PluginState));
   if (!new_list) {
     printf("Failed allocating plugin states array.\n");
     return 0;
   }
+
   // This CPU count shouldn't be the number of available CPUs, but simply the
   // number at which our cyclic CPU core assignment rolls over.
   cpu_count = sysconf(_SC_NPROCESSORS_CONF);
@@ -394,8 +378,11 @@ static int CreatePluginStates(SharedState *shared_state) {
     printf("Failed getting CPU list.\n");
     goto ErrorCleanup;
   }
+
+  // Initialize the members of the plugins list.
   for (i = 0; i < config->plugin_count; i++) {
     plugin_config = config->plugins + i;
+    new_list[i].plugin_index = i;
     new_list[i].config = plugin_config;
     new_list[i].shared_state = shared_state;
     // Either cycle through CPUs or use the per-plugin CPU core.
@@ -411,8 +398,8 @@ static int CreatePluginStates(SharedState *shared_state) {
       }
       new_list[i].cpu_core = plugin_config->cpu_core;
     }
-    // Now try opening a log file for this plugin.
-    // TODO: Make sure that no two plugins have the same log file name.
+
+    // Try opening a log file for this plugin.
     new_list[i].output_file = fopen(plugin_config->log_name, "wb");
     if (!new_list[i].output_file) {
       printf("Failed opening log file %s: %s\n", plugin_config->log_name,
@@ -422,6 +409,7 @@ static int CreatePluginStates(SharedState *shared_state) {
   }
   shared_state->plugins = new_list;
   return 1;
+
 ErrorCleanup:
   for (i = 0; i < config->plugin_count; i++) {
     if (new_list[i].output_file) fclose(new_list[i].output_file);
@@ -815,11 +803,8 @@ static void* RunPlugin(void *data) {
   int64_t max_iterations;
   double start_time, time_limit;
   PluginState *state = (PluginState *) data;
-  ProcessMutex *mutex = &(state->shared_state->mutex);
   ProcessBarrier *barrier = &(state->shared_state->barrier);
   int barrier_local_sense = 0;
-  int sync_initialization =
-    state->shared_state->global_config->sync_initialization;
   TimingInformation timing_info;
   void *user_data = NULL;
   const char *name;
@@ -840,13 +825,9 @@ static void* RunPlugin(void *data) {
     return NULL;
   }
   start_time = CurrentSeconds();
-
-  // Acquire the mutex if we're supposed to sync during initialization.
-  if (sync_initialization) {
-    if (!MutexAcquire(mutex)) {
-      printf("Failed acquiring initialization mutex.\n");
-      return NULL;
-    }
+  if (!SleepSeconds(state->config->initialization_delay)) {
+    printf("Failed sleeping prior to initializing %s.\n", name);
+    return NULL;
   }
   user_data = state->functions.initialize(&initialization_parameters);
   if (!user_data) {
@@ -864,11 +845,9 @@ static void* RunPlugin(void *data) {
       return NULL;
     }
   }
-  // Release the mutex if we acquired it earlier.
-  if (sync_initialization) MutexRelease(mutex);
 
-  printf("Plugin %s initialized in %f seconds.\n", name, CurrentSeconds() -
-    start_time);
+  printf("Plugin %d: %s initialized in %f seconds.\n", state->plugin_index,
+    name, CurrentSeconds() - start_time);
   fflush(stdout);
   if (!BarrierWait(barrier, &barrier_local_sense)) {
     printf("Failed waiting for post-initialization synchronization.\n");
@@ -1082,14 +1061,6 @@ int main(int argc, char **argv) {
   if (!BarrierCreate(&(shared_state->barrier),
     shared_state->global_config->plugin_count)) {
     printf("Failed initializing synchronization barrier.\n");
-    Cleanup(shared_state);
-    return 1;
-  }
-
-  // Create the mutex, which may be used to force plugins to take turns
-  // initializing.
-  if (!MutexCreate(&(shared_state->mutex))) {
-    printf("Failed initializing mutex.\n");
     Cleanup(shared_state);
     return 1;
   }

@@ -36,6 +36,9 @@ typedef struct {
   // The maximum number of seconds to run this plugin alone; will override the
   // global limit if set (0 = unlimited, negative = unset).
   double max_time;
+  // The number of seconds for which the framework should sleep before calling
+  // the plugin's initialize function. If 0 or negative, it won't sleep at all.
+  double initialization_delay;
   // The number of seconds for which the plugin should sleep before starting.
   // If 0 or negative, it won't sleep at all.
   double release_time;
@@ -69,9 +72,6 @@ typedef struct {
   // iterations complete. If 1, then every plugin starts each iteration only
   // after the previous iteration of every plugin has completed.
   int sync_every_iteration;
-  // IF zero, allow all processes to initialize asynchronously. Otherwise,
-  // require each task to hold a mutex while initializing and warming up.
-  int sync_initialization;
   // If 1, then an additional copy-in, execute, copy-out cycle will be carried
   // out during initialization. The results from this first iteration will not
   // be included in the final log. This can be used as a warm-up pass to ensure

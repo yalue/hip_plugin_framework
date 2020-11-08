@@ -58,7 +58,6 @@ static int VerifyGlobalConfigKeys(cJSON *main_config) {
     "pin_cpus",
     "plugins",
     "sync_every_iteration",
-    "sync_initialization",
     "do_warmup",
     "omit_block_times",
     "comment",
@@ -81,6 +80,7 @@ static int VerifyPluginConfigKeys(cJSON *plugin_config) {
     "max_iterations",
     "max_time",
     "release_time",
+    "initialization_delay",
     "cpu_core",
     "compute_unit_mask",
     "comment",
@@ -350,6 +350,16 @@ static int ParsePluginList(GlobalConfiguration *config, cJSON *list_start) {
     } else {
       plugins[i].release_time = 0;
     }
+    entry = cJSON_GetObjectItem(current_plugin, "initialization_delay");
+    if (entry) {
+      if (entry->type != cJSON_Number) {
+        printf("Invalid initialization_delay in config.\n");
+        goto ErrorCleanup;
+      }
+      plugins[i].initialization_delay = entry->valuedouble;
+    } else {
+      plugins[i].initialization_delay = 0;
+    }
     entry = cJSON_GetObjectItem(current_plugin, "cpu_core");
     if (entry) {
       if (entry->type != cJSON_Number) {
@@ -492,17 +502,6 @@ GlobalConfiguration* ParseConfiguration(const char *config) {
     to_return->sync_every_iteration = entry->type == cJSON_True;
   } else {
     to_return->sync_every_iteration = 0;
-  }
-
-  entry = cJSON_GetObjectItem(root, "sync_initialization");
-  if (entry) {
-    if (!IsCJSONBoolean(entry)) {
-      printf("Invalid sync_initialization setting in config.\n");
-      goto ErrorCleanup;
-    }
-    to_return->sync_initialization = entry->type == cJSON_True;
-  } else {
-    to_return->sync_initialization = 0;
   }
 
   entry = cJSON_GetObjectItem(root, "do_warmup");

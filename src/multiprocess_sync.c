@@ -23,10 +23,7 @@ typedef struct {
   int process_count;
 } InternalSharedBarrier;
 
-// Allocates a private shared memory buffer containing the given number of
-// bytes. Can be freed by using FreeSharedBuffer. Returns NULL on error.
-// Initializes the buffer to contain 0.
-static void* AllocateSharedBuffer(size_t size) {
+void* AllocateSharedBuffer(size_t size) {
   void *to_return = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS |
     MAP_SHARED, -1, 0);
   if (to_return == MAP_FAILED) return NULL;
@@ -34,8 +31,7 @@ static void* AllocateSharedBuffer(size_t size) {
   return to_return;
 }
 
-// Frees a shared buffer returned by AllocateSharedBuffer.
-static void FreeSharedBuffer(void *buffer, size_t size) {
+void FreeSharedBuffer(void *buffer, size_t size) {
   munmap(buffer, size);
 }
 
@@ -123,6 +119,10 @@ int MutexAcquire(ProcessMutex *m) {
 void MutexRelease(ProcessMutex *m) {
   volatile InternalSharedMutex *internal =
     (InternalSharedMutex *) m->internal_buffer;
+  if (!internal->v) {
+    printf("Error! Releasing a non-held mutex!\n");
+    return;
+  }
   atomic_store(&(internal->v), 0);
 }
 

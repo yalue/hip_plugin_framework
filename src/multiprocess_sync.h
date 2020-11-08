@@ -55,6 +55,14 @@ int MutexAcquire(ProcessMutex *m);
 // Releases the mutex.
 void MutexRelease(ProcessMutex *m);
 
+// Allocates a private shared memory buffer containing the given number of
+// bytes. Can be freed by using FreeSharedBuffer. Returns NULL on error.
+// Initializes the buffer to contain 0.
+void *AllocateSharedBuffer(size_t size);
+
+// Frees a shared buffer returned by AllocateSharedBuffer.
+void FreeSharedBuffer(void *buffer, size_t size);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

@@ -5,10 +5,10 @@
 // under the current ROCclr implementation).  If use_cu_mask is false, then any
 // number of streams will be share a number of HSA queues specified by the
 // GPU_MAX_HW_QUEUES, defined in ROCclr/utils/flags.hpp (defaults to 4).
-// This plugin launches a simple kernel into each stream during its Execute
-// phase to guarantee that the streams are actually created and associated with
-// some queue. It respects the thread_count and block_count settings, but the
-// kernel's behavior shouldn't change with more threads or blocks.
+// This plugin launches a simple kernel into each stream during its Initialize
+// phase to guarantee that the streams are actually created. The thread_count
+// and block_count settings are ignored, as it doesn't do any work during the
+// Execute phase.
 //
 // This plugin's additional_info must be a JSON object with the following keys:
 //
@@ -34,11 +34,6 @@
 typedef struct {
   // The list of hipStream_t instances created by this plugin.
   hipStream_t *streams;
-  // This is a pointer to a single uint64_t on the GPU, which we use to launch
-  // a bunch of useless but tiny memory copies.
-  uint64_t *dummy_buffer_d;
-  // A copy of the dummy buffer on the host.
-  uint64_t dummy_buffer_h;
   // The number of streams in the list.
   int stream_count;
   // The number of threads and blocks to launch.
@@ -51,7 +46,6 @@ static void Cleanup(void *data) {
   int i;
   PluginState *state = (PluginState *) data;
   if (!state) return;
-  CheckHIPError(hipFree(state->dummy_buffer_d));
   for (i = 0; i < state->stream_count; i++) {
     if (state->streams[i]) {
       CheckHIPError(hipStreamDestroy(state->streams[i]));
@@ -123,6 +117,25 @@ static int CreateStreams(InitializationParameters *params,
   return 1;
 }
 
+// Does basically nothing except write to the buffer, if it exists.
+__global__ void DummyWorkKernel(uint64_t *buffer) {
+  uint64_t v = blockIdx.x * blockDim.x + threadIdx.x;
+  if (buffer) *buffer = v;
+}
+
+// Launches one simple kernel in each stream, to force them to be used.
+static int LaunchInitializationKernels(PluginState *state) {
+  int i;
+  for (i = 0; i < state->stream_count; i++) {
+    hipLaunchKernelGGL(DummyWorkKernel, state->block_count,
+      state->thread_count, 0, state->streams[i], (uint64_t *) NULL);
+  }
+  for (i = 0; i < state->stream_count; i++) {
+    if (!CheckHIPError(hipStreamSynchronize(state->streams[i]))) return 0;
+  }
+  return 1;
+}
+
 static void* Initialize(InitializationParameters *params) {
 #ifndef __HIP__
   printf("dummy_streams requires using AMD GPUs supporting CU masking.\n");
@@ -151,15 +164,17 @@ static void* Initialize(InitializationParameters *params) {
     free(state);
     return NULL;
   }
-  if (!CheckHIPError(hipMalloc(&state->dummy_buffer_d, sizeof(uint64_t)))) {
-    printf("Failed allocating dummy buffer for memcpy's.\n");
-    Cleanup(state);
-    return NULL;
-  }
 
   // Finally, create the streams.
   if (!CreateStreams(params, state)) {
     printf("Failed creating streams.\n");
+    Cleanup(state);
+    return NULL;
+  }
+
+  // Launch a dummy kernel in each stream, to force them to actually be used.
+  if (!LaunchInitializationKernels(state)) {
+    printf("Failed launching initial kernels.\n");
     Cleanup(state);
     return NULL;
   }
@@ -172,49 +187,19 @@ static int CopyIn(void *data) {
   return 1;
 }
 
-// Does basically nothing except write to the buffer.
-__global__ void DummyWorkKernel(uint64_t *buffer) {
-  uint64_t v = blockIdx.x * blockDim.x + threadIdx.x;
-  *buffer = v;
-}
-
-// The execute function just does a bit of work to use the streams. For now,
-// it launches a minimal kernel in each stream, then synchronizes with all of
-// them.
-//
-// TODO: Record block and kernel launch times for each of the dummy kernels.
+// This execute function is a no-op; the only purpose of this plugin is to
+// create the streams during the initialize function.
 static int Execute(void *data) {
-  PluginState *state = (PluginState *) data;
-  int i;
-  for (i = 0; i < state->stream_count; i++) {
-    hipLaunchKernelGGL(DummyWorkKernel, state->block_count,
-      state->thread_count, 0, state->streams[i], state->dummy_buffer_d);
-  }
-  for (i = 0; i < state->stream_count; i++) {
-    if (!CheckHIPError(hipStreamSynchronize(state->streams[i]))) return 0;
-  }
   return 1;
 }
 
 // No need to copy anything out, but just let the framework know that we ran no
 // kernels.
 static int CopyOut(void *data, TimingInformation *times) {
-  PluginState *state = (PluginState *) data;
   times->kernel_count = 0;
   times->kernel_times = NULL;
-  times->resulting_data_size = sizeof(uint64_t);
-  times->resulting_data = &state->dummy_buffer_h;
-  // We ran no GPU work if our stream_count was 0.
-  if (state->stream_count == 0) return 1;
-
-  // We'll just use stream 0 as an arbitrary choice for copying the dummy data
-  // back to the host.
-  if (!CheckHIPError(hipMemcpyAsync(&(state->dummy_buffer_h),
-    state->dummy_buffer_d, sizeof(uint64_t), hipMemcpyDeviceToHost,
-    state->streams[0]))) {
-    return 0;
-  }
-  if (!CheckHIPError(hipStreamSynchronize(state->streams[0]))) return 0;
+  times->resulting_data_size = 0;
+  times->resulting_data = NULL;
   return 1;
 }
 
