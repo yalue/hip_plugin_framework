@@ -3,7 +3,7 @@
 CFLAGS := -Wall -Werror -O3 -g -fPIC
 
 PLUGIN_DEPENDENCIES := src/plugin_interface.h obj/plugin_utilities.o \
-	obj/plugin_hip_utilities.o
+	obj/plugin_hip_utilities.o obj/cJSON.o
 
 RODINIA_DIR := src/third_party/rodinia_plugins
 
@@ -12,7 +12,7 @@ all: directories plugins bin/runner bin/hip_host_utilities.so bin/list_devices \
 
 plugins: directories bin/mandelbrot.so bin/counter_spin.so bin/timer_spin.so \
 	bin/random_walk.so bin/huge_kernels.so bin/memory_copy.so \
-	bin/vector_add.so bin/dummy_streams.so
+	bin/vector_add.so bin/dummy_streams.so bin/matrix_multiply.so
 
 rodinia_plugins: directories obj/cJSON.o obj/plugin_utilities.o \
 	obj/plugin_hip_utilities.o
@@ -66,14 +66,14 @@ bin/timer_spin.so: obj/timer_spin.o $(PLUGIN_DEPENDENCIES)
 obj/random_walk.o: src/random_walk.cpp $(PLUGIN_DEPENDENCIES)
 	hipcc -c $(CFLAGS) -o obj/random_walk.o src/random_walk.cpp
 
-bin/random_walk.so: obj/random_walk.o obj/cJSON.o $(PLUGIN_DEPENDENCIES)
+bin/random_walk.so: obj/random_walk.o $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/random_walk.so obj/random_walk.o \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
 obj/memory_copy.o: src/memory_copy.cpp $(PLUGIN_DEPENDENCIES)
 	hipcc -c $(CFLAGS) -o obj/memory_copy.o src/memory_copy.cpp
 
-bin/memory_copy.so: obj/memory_copy.o obj/cJSON.o $(PLUGIN_DEPENDENCIES)
+bin/memory_copy.so: obj/memory_copy.o $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/memory_copy.so obj/memory_copy.o \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
@@ -89,6 +89,13 @@ obj/vector_add.o: src/vector_add.cpp $(PLUGIN_DEPENDENCIES)
 
 bin/vector_add.so: obj/vector_add.o $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/vector_add.so obj/vector_add.o \
+		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
+
+obj/matrix_multiply.o: src/matrix_multiply.cpp $(PLUGIN_DEPENDENCIES)
+	hipcc -c $(CFLAGS) -o obj/matrix_multiply.o src/matrix_multiply.cpp
+
+bin/matrix_multiply.so: obj/matrix_multiply.o $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/matrix_multiply.so obj/matrix_multiply.o \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
 obj/dummy_streams.o: src/dummy_streams.cpp $(PLUGIN_DEPENDENCIES)
