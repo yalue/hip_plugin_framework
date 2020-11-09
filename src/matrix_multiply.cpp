@@ -1,8 +1,7 @@
-// This plugin allocates two vectors of floating-point numbers.
-// This plugin multiplies two square matrices, using a
-// not-particularly-optimized matrix multiply kernel. This uses a 2D grid of
-// 2D blocks, with one thread per resulting matrix element. The block_count
-// setting is ignored, and thread_count must be either 64, 256, or 1024, in
+// This plugin multiplies two square matrices, using a not-particularly-
+// optimized matrix multiply kernel. This uses a 2D grid of 2D blocks, mapping
+// one thread per resulting matrix element. The block_count setting from the
+// config is ignored, and thread_count must be either 64, 256, or 1024, in
 // order to use 8x8, 16x16, or 32x32 blocks, respectively. The additional_info
 // must be a JSON object with the following keys:
 //
@@ -132,7 +131,7 @@ static int ParseAdditionalInfo(const char *arg, PluginState *state) {
     return 0;
   }
 
-  // Make sure that vector_length is present and positive.
+  // Make sure that matrix_width is present and positive.
   entry = cJSON_GetObjectItem(root, "matrix_width");
   if (!entry || (entry->type != cJSON_Number)) {
     printf("Invalid matrix_width setting.\n");
@@ -227,7 +226,7 @@ static void* Initialize(InitializationParameters *params) {
   state->kernel_times.block_count = state->grid_size.x * state->grid_size.y;
   state->kernel_times.shared_memory = 0;
 
-  // Allocate the vectors and initialize the input matrices
+  // Allocate the matrices and initialize the input matrices
   if (!AllocateMemory(state)) {
     Cleanup(state);
     return NULL;
@@ -314,7 +313,7 @@ static int Execute(void *data) {
   return 1;
 }
 
-// Copy the block times to the host, along with the result vector.
+// Copy the block times to the host, along with the result matrix.
 static int CopyOut(void *data, TimingInformation *times) {
   PluginState *state = (PluginState *) data;
   int block_count = state->grid_size.x * state->grid_size.y;
