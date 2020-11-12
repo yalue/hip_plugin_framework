@@ -1,0 +1,37 @@
+{
+  "comment": "This config is intended to be used to generate a timeline",
+  "comment": "visualizing how smaller blocks are prioritized over large ones",
+  "name": "Timeline of Matrix-Multiply Blocks, 1024 vs. 256 Threads",
+  "max_iterations": 1,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "pin_cpus": true,
+  "use_processes": true,
+  "do_warmup": true,
+  "plugins": [
+    {
+      "label": "1024-thread blocks",
+      "log_name": "results/cutting_ahead_timeline_1024_blocks.json",
+      "filename": "./bin/matrix_multiply.so",
+      "thread_count": 1024,
+      "block_count": 1,
+      "additional_info": {
+        "matrix_width": 1024,
+        "vector_length": 4000000,
+        "skip_copy": true
+      }
+    },
+    {
+      "label": "256-thread blocks",
+      "log_name": "results/cutting_ahead_timeline_256_blocks.json",
+      "filename": "./bin/matrix_multiply.so",
+      "thread_count": 256,
+      "block_count": 1,
+      "additional_info": {
+        "matrix_width": 1024,
+        "vector_length": 4000000,
+        "skip_copy": true
+      }
+    }
+  ]
+}

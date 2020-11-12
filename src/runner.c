@@ -623,16 +623,17 @@ static int WriteCPUTimesToOutput(PluginState *state, CPUTimes *t) {
 // is responsible for writing the "block_times": [....] portion of the output
 // file only.)
 static int WriteBlockTimes(PluginState *state, KernelTimes *kernel) {
+  // TODO: If there's a way to get a direct, steady, mapping between CPU and
+  // GPU clocks, implement it here.
   SharedState *shared_state = state->shared_state;
   FILE *output = state->output_file;
   uint64_t starting_clock;
   double t;
   int i, block_time_count;
-  starting_clock = shared_state->device_info.starting_clock;
-  // TODO: Figure out a way to get a steady clock rate, if possible? Neither
-  // the rate provided by hipGetDeviceProperties nor the rate obtained by just
-  // measuring the clocks on the GPU vs. CPU time provide accurate-seeming
-  // results.
+  // TODO: Is there a way to set starting_clock back to
+  // shared_state->device_info.starting_clock? This appears to lead to odd wrap
+  // around effects occasionally, so I'm leaving this as 0 for now.
+  starting_clock = 0;
   if (fprintf(output, "\"block_times\": [") < 0) {
     return 0;
   }
