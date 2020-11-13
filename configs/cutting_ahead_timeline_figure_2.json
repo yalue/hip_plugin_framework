@@ -22,7 +22,7 @@
       }
     },
     {
-      "label": "1024-thread blocks (2nd instance)",
+      "label": "Identical Competitor",
       "log_name": "results/cutting_ahead_timeline_1024_block_identical_comp2.json",
       "filename": "./bin/matrix_multiply.so",
       "thread_count": 1024,
