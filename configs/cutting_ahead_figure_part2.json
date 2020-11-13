@@ -1,0 +1,38 @@
+{
+  "comment": "This generates one of the curves in a plot illustrating the bad",
+  "comment": "effects of dealing with a competing workload with smaller blocks",
+  "comment": "that can cut ahead in the contest for CUs.",
+  "name": "Effects of blocks 'cutting ahead'",
+  "max_iterations": 1000000,
+  "max_time": 5,
+  "sync_every_iteration": false,
+  "gpu_device_id": 0,
+  "omit_block_times": true,
+  "pin_cpus": true,
+  "use_processes": true,
+  "do_warmup": true,
+  "plugins": [
+    {
+      "label": "vs. identical competitor (1024)",
+      "log_name": "results/cutting_ahead_vs_1024.json",
+      "filename": "./bin/matrix_multiply.so",
+      "thread_count": 1024,
+      "block_count": 1,
+      "additional_info": {
+        "matrix_width": 1024,
+        "skip_copy": true
+      }
+    },
+    {
+      "label": "competitor",
+      "log_name": "/dev/null",
+      "filename": "./bin/matrix_multiply.so",
+      "thread_count": 1024,
+      "block_count": 1,
+      "additional_info": {
+        "matrix_width": 1024,
+        "skip_copy": true
+      }
+    }
+  ]
+}
