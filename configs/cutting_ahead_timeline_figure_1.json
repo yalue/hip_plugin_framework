@@ -10,7 +10,7 @@
   "do_warmup": true,
   "plugins": [
     {
-      "label": "1024-thread blocks (isolated)",
+      "label": "MM1024 (isolated)",
       "log_name": "results/cutting_ahead_timeline_isolated.json",
       "filename": "./bin/matrix_multiply.so",
       "thread_count": 1024,

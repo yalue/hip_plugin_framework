@@ -5,7 +5,8 @@ import subprocess
 
 def generate_config(cu_mask, stripe_width):
     """ Returns a JSON string containing a config. The config will use the
-    Mandelbrot plugin with basic settings, but varying the compute unit mask.
+    Matrix Multiply plugin with a 1024x1024 matrix, using 32x32 thread blocks.
+    Only the compute unit mask is varied.
     """
     active_cu_count = 0
     for b in cu_mask:
@@ -14,20 +15,23 @@ def generate_config(cu_mask, stripe_width):
     hex_mask = cu_mask_to_hex_string(cu_mask)
     plugin_config = {
         "label": str(active_cu_count),
-        "log_name": "results/cu_mask_sw%d_%s.json" % (stripe_width, hex_mask,),
-        "filename": "./bin/mandelbrot.so",
-        "thread_count": 256,
-        "block_count": 2000,
+        "log_name": "results/cu_mask_sw%d_%s.json" % (stripe_width, hex_mask),
+        "filename": "./bin/matrix_multiply.so",
+        "thread_count": 1024,
+        "block_count": 1,
         "compute_unit_mask": cu_mask,
-        "additional_info": 512,
+        "additional_info": {
+            "matrix_width": 1024,
+            "skip_copy": True
+        }
     }
     name = "Compute Unit Count vs. Performance"
     # Indicate the stripe width if it isn't the default
     if stripe_width != 1:
-        name += "(stripe width: %d)" % (stripe_width,)
+        name += " (stripe width: %d)" % (stripe_width,)
     overall_config = {
         "name": name,
-        "max_iterations": 1000,
+        "max_iterations": 100,
         "max_time": 0,
         "gpu_device_id": 0,
         "pin_cpus": True,
@@ -81,6 +85,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--cu_count", type=int, default=60,
         help="The total number of CUs on the GPU.")
+    parser.add_argument("--start_count", type=int, default=0,
+        help="The number of CUs to start testing from. Can be used to resume "+
+            "tests if one hung.")
     parser.add_argument("--stripe_width", type=int, default=1,
         help="The width, in CUs, of the \"stripe\" used to assign subsequent "+
             "CUs. Must evenly divide the cu_count.")
@@ -95,7 +102,9 @@ if __name__ == "__main__":
     if (cu_count % stripe_width) != 0:
         print("Invalid stripe width: it must evenly divide the CU count.")
         exit(1)
-    for active_cus in range(cu_count):
+    for active_cus in range(args.start_count, cu_count):
+        print("Running test for %d (+ 1) active CUs." % (active_cus))
         cu_mask = get_cu_mask(active_cus + 1, cu_count, stripe_width)
         run_process(cu_mask, stripe_width)
+        print("\n")
 

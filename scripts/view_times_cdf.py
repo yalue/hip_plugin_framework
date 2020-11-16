@@ -98,13 +98,13 @@ def get_line_styles():
     if all_styles is not None:
         return all_styles
     color_options = [
+        "black",
+        "cyan",
+        "red",
+        "magenta",
         "blue",
         "green",
-        "red",
-        "cyan",
-        "magenta",
         "y",
-        "black",
     ]
     # [Solid line, dashed line, dash-dot line, dotted line]
     dashes_options = [

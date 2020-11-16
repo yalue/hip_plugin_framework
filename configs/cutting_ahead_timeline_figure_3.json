@@ -10,7 +10,7 @@
   "do_warmup": true,
   "plugins": [
     {
-      "label": "1024-thread blocks",
+      "label": "MM1024",
       "log_name": "results/cutting_ahead_timeline_1024_blocks.json",
       "filename": "./bin/matrix_multiply.so",
       "thread_count": 1024,
@@ -22,7 +22,7 @@
       }
     },
     {
-      "label": "256-thread blocks",
+      "label": "MM256",
       "log_name": "results/cutting_ahead_timeline_256_blocks.json",
       "filename": "./bin/matrix_multiply.so",
       "thread_count": 256,

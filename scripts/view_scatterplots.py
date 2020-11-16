@@ -20,12 +20,12 @@ def convert_to_float(s):
         to_return = None
     return to_return
 
-def benchmark_summary_values(benchmark, times_key):
-    """Takes a single benchmark results (one parsed output file) and returns
+def plugin_summary_values(plugin, times_key):
+    """Takes a single plugin results (one parsed output file) and returns
     a list containing 3 elements: [min duration, max duration, mean duration].
     Durations are converted to milliseconds."""
     durations = []
-    for t in benchmark["times"]:
+    for t in plugin["times"]:
         if times_key not in t:
             continue
         times = t[times_key]
@@ -95,7 +95,7 @@ def plot_scenario(scenario, name):
 def show_plots(filenames, times_key):
     """Takes a list of filenames and generates one plot per named scenario
     across all of the files."""
-    # Maps benchmark names to benchmark data, where the benchmark data is a map
+    # Maps plugin names to plugin data, where the plugin data is a map
     # of X-values to y-value triplets.
     all_scenarios = {}
     counter = 1
@@ -114,7 +114,7 @@ def show_plots(filenames, times_key):
             if float_value is None:
                 print("Skipping %s: label isn't a number." % (name))
                 continue
-            summary_values = benchmark_summary_values(parsed, times_key)
+            summary_values = plugin_summary_values(parsed, times_key)
             name = parsed["scenario_name"]
             if name not in all_scenarios:
                 all_scenarios[name] = {}
