@@ -10,15 +10,13 @@ multiple GPU-sharing tasks on NVIDIA.  The HIP plugin framework is
 architecturally similar, but has been overhauled to use more intuitive
 terminology and to remove any NVIDIA-specific code.  (Which, unfortunately
 means that this project is unable to plot which compute units blocks are
-assigned to.
+assigned to.)
 
 Some of this project may require modified versions of AMD's HIP framework or
 other ROCm components (as it is intended to support my research). If any such
 modifications are needed, they should be included in
-[this repository](https://github.com/yalue/rocm_mega_repo).
-
-As of ROCm 3.7, however, this repository should not require any non-standard
-HIP functionality.
+[this repository](https://github.com/yalue/rocm_mega_repo). As of ROCm 3.7,
+however, this repository should not require any non-standard HIP functionality.
 
 
 Basic Compilation and Usage
@@ -41,22 +39,6 @@ To test it, run:
 ```bash
 ./bin/runner configs/simple.json
 ```
-
-
-Rodinia Plugins
----------------
-
-This project contains several plugins that have been ported from the [Rodinia
-benchmark suite](http://lava.cs.virginia.edu/Rodinia/download_links.htm). The
-code for these plugins are located in the `src/third_party/rodinia_plugins`
-directory.  The four plugins, `backprop`, `dwt2d`, `gaussian`, and
-`particlefilter` have been modified to clean up code, remove global variables,
-and to adhere to the plugin interface required by the project.
-
-Compile these plugins by running `make rodinia_plugins` in the main project
-directory. Some sample configs exist for testing these plugins in `configs/`.
-For example, running `./bin/runner configs/particlefilter.json` launches a
-single instance of the `particlefilter` plugin.
 
 
 Configuration Files
@@ -149,6 +131,7 @@ The layout of each configuration file is as follows:
 Additionally, configurations support the insertion of comments via the usage of
 "comment" keys, which will be ignored at runtime.
 
+
 Output File Format
 ------------------
 
@@ -213,6 +196,7 @@ CPU times and one type will apply to kernel times. An object containing CPU
 times will contain a `"cpu_times"` key. A single CPU times object will
 encompass all kernel times following it, up until another CPU times object.
 
+
 Creating New Plugins
 --------------------
 
@@ -271,6 +255,7 @@ Plugins are invoked by the framework as follows:
     the framework will still call the plugin's `cleanup` function, and then
     cease calling further functions from the plugin.
 
+
 Coding Style
 ------------
 
@@ -282,4 +267,20 @@ that apply to the C language.
 Scripts should remain in the `scripts/` directory and should be written in
 python when possible. For now, there is no explicit style guide for python
 scripts apart from trying to maintain a consistent style within each file.
+
+
+Rodinia Plugins
+---------------
+
+This project contains several plugins that have been ported from the [Rodinia
+benchmark suite](http://lava.cs.virginia.edu/Rodinia/download_links.htm). The
+code for these plugins are located in the `src/third_party/rodinia_plugins`
+directory.  The four plugins, `backprop`, `dwt2d`, `gaussian`, and
+`particlefilter` have been modified to clean up code, remove global variables,
+and to adhere to the plugin interface required by the project.
+
+Compile these plugins by running `make rodinia_plugins` in the main project
+directory. Some sample configs exist for testing these plugins in `configs/`.
+For example, running `./bin/runner configs/particlefilter.json` launches a
+single instance of the `particlefilter` plugin.
 
