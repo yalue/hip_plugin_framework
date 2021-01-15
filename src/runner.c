@@ -108,7 +108,7 @@ static int SetBufferSize(void **buffer, size_t new_size) {
 }
 
 // Returns the TID of the calling thread.
-static pid_t GetThreadID(void) {
+static pid_t GetTID(void) {
   pid_t to_return = syscall(SYS_gettid);
   return to_return;
 }
@@ -578,7 +578,7 @@ static int WriteOutputHeader(PluginState *state) {
   }
   // Only include the POSIX thread ID if threads are used.
   if (!state->shared_state->global_config->use_processes) {
-    if (fprintf(output, "\"TID\": %d,\n", (int) GetThreadID()) < 0) {
+    if (fprintf(output, "\"TID\": %d,\n", (int) GetTID()) < 0) {
       return 0;
     }
   }
@@ -810,6 +810,8 @@ static void* RunPlugin(void *data) {
   void *user_data = NULL;
   const char *name;
 
+  printf("Running plugin in process PID %d, TID %d\n", (int) getpid(),
+    (int) GetTID());
   if (!LoadPluginLibrary(state)) {
     printf("Failed loading a plugin's shared library file.\n");
     return NULL;
