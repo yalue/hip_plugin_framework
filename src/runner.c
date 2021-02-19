@@ -810,8 +810,6 @@ static void* RunPlugin(void *data) {
   void *user_data = NULL;
   const char *name;
 
-  printf("Running plugin in process PID %d, TID %d\n", (int) getpid(),
-    (int) GetTID());
   if (!LoadPluginLibrary(state)) {
     printf("Failed loading a plugin's shared library file.\n");
     return NULL;
