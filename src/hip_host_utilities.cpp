@@ -65,7 +65,7 @@ int GetDeviceInformation(int device_id, DeviceInformation *info) {
   if (!CheckHIPError(hipMalloc(&device_clock, sizeof(uint64_t) * 2))) return 0;
 
   // Next, we'll do a bunch of stuff to get a base GPU clock and GPU clock rate
-  // (since the value returened by hipGetDeviceProperties usually isn't that
+  // (since the value returned by hipGetDeviceProperties usually isn't that
   // close to the actual rate at runtime. We'll start by "warming up" the
   // clock-reading kernel and running the spin kernel to hopefully bring the
   // GPU out of a low-power state.
