@@ -48,14 +48,3 @@ hipError_t CreateHIPStreamWithMask(hipStream_t *stream, uint32_t *mask,
   return result;
 }
 
-int SingleValueInDim3(int *values, int *x) {
-  // We want to validate that we got a single-dimensional dim3 here for block
-  // or grid dimensions, which means that the y and z components must be 1.
-  if ((values[1] != 1) || (values[2] != 1)) {
-    printf("Expected a 1-dimensional block or grid dim, got [%d, %d, %d]\n",
-      values[0], values[1], values[2]);
-    return 0;
-  }
-  *x = values[0];
-  return 1;
-}
