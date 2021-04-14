@@ -221,6 +221,64 @@ static int ParseComputeUnitMask(cJSON *plugin_config, uint32_t *mask_values) {
   return 1;
 }
 
+// Used for parsing block_count and thread_count. The cJSON object must either
+// be a single number or an array containing 1, 2, or 3 entries, all of which
+// must be numbers. Returns 0 on error, including if any numbers are negative,
+// the entry isn't a number or an array, if the array is too large or empty,
+// etc.
+static int ParseDim3OrInt(cJSON *entry, int *dim3) {
+  cJSON *element = NULL;
+  int i, array_length;
+  // All entries in the dimensions default to 1, so setting only lower values
+  // will be valid.
+  for (i = 0; i < 3; i++) {
+    dim3[i] = 1;
+  }
+
+  // If it's a number, we can just return right away.
+  if (entry->type == cJSON_Number) {
+    if (entry->valueint <= 0) {
+      printf("Block and grid dims must be positive.\n");
+      return 0;
+    }
+    dim3[0] = entry->valueint;
+    return 1;
+  }
+
+  if ((entry->type != cJSON_Array) || (!entry->child)) {
+    printf("Block and grid dims must either be a number or non-empty array\n");
+    return 0;
+  }
+  array_length = 1;
+  element = entry->child;
+  element = element->next;
+  // Walk the list to figure out the length.
+  while (element) {
+    array_length++;
+    if (array_length > 3) {
+      printf("Block and grid dims may have at most 3 entries.\n");
+      return 0;
+    }
+    element = element->next;
+  }
+
+  // "Rewind" back to the first array element and parse the values.
+  element = entry->child;
+  for (i = 0; i < array_length; i++) {
+    if (element->type != cJSON_Number) {
+      printf("Block and grid dim array entries must be numbers.\n");
+      return 0;
+    }
+    if (element->valueint <= 0) {
+      printf("Block and grid dim array entries must be positive.\n");
+      return 0;
+    }
+    dim3[i] = element->valueint;
+  }
+
+  return 1;
+}
+
 // Parses the list of individaul plugin settings, starting with the entry given
 // by list_start. The list_start entry must have already been valideated when
 // this is called. On error, this will return 0 and leave the config object
@@ -239,12 +297,11 @@ static int ParsePluginList(GlobalConfiguration *config, cJSON *list_start) {
     entry = entry->next;
   }
   plugins_size = plugin_count * sizeof(PluginConfiguration);
-  plugins = (PluginConfiguration *) malloc(plugins_size);
+  plugins = (PluginConfiguration *) calloc(1, plugins_size);
   if (!plugins) {
     printf("Failed allocating space for the plugin list.\n");
     return 0;
   }
-  memset(plugins, 0, plugins_size);
   // Next, traverse the array and fill in our parsed copy.
   current_plugin = list_start;
   for (i = 0; i < plugin_count; i++) {
@@ -284,17 +341,15 @@ static int ParsePluginList(GlobalConfiguration *config, cJSON *list_start) {
       }
     }
     entry = cJSON_GetObjectItem(current_plugin, "thread_count");
-    if (!entry || (entry->type != cJSON_Number)) {
+    if (!ParseDim3OrInt(entry, plugins[i].block_dim)) {
       printf("Missing/invalid plugin thread_count in config.\n");
       goto ErrorCleanup;
     }
-    plugins[i].thread_count = entry->valueint;
     entry = cJSON_GetObjectItem(current_plugin, "block_count");
-    if (!entry || (entry->type != cJSON_Number)) {
+    if (!ParseDim3OrInt(entry, plugins[i].grid_dim)) {
       printf("Missing/invalid plugin block_count in config.\n");
       goto ErrorCleanup;
     }
-    plugins[i].block_count = entry->valueint;
     entry = cJSON_GetObjectItem(current_plugin, "additional_info");
     if (entry) {
       plugins[i].additional_info = cJSON_PrintUnformatted(entry);
@@ -392,12 +447,11 @@ GlobalConfiguration* ParseConfiguration(const char *config) {
   GlobalConfiguration *to_return = NULL;
   cJSON *root = NULL;
   cJSON *entry = NULL;
-  to_return = (GlobalConfiguration *) malloc(sizeof(*to_return));
+  to_return = (GlobalConfiguration *) calloc(1, sizeof(*to_return));
   if (!to_return) {
     printf("Failed allocating config memory.\n");
     return NULL;
   }
-  memset(to_return, 0, sizeof(*to_return));
   root = cJSON_Parse(config);
   if (!root) {
     printf("Failed parsing JSON.\n");

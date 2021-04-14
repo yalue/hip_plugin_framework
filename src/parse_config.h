@@ -20,10 +20,12 @@ typedef struct {
   char *log_name;
   // An extra label or name for the plugin, included in its JSON log file.
   char *label;
-  // The number of threads to request the plugin to use
-  int thread_count;
-  // The number of blocks to request the plugin to use
-  int block_count;
+  // Specifies the dimensions of a single block, in terms of the number of
+  // threads. Contains the x, y, and z dimensions, in that order.
+  int block_dim[3];
+  // Specifies the number of blocks to use when launching the kernel. Contains
+  // the x, y, and z dimensions, in that order.
+  int grid_dim[3];
   // A string containing an additional user-defined argument to pass to the
   // plugin during initialization. May be either NULL or empty if unspecified.
   char *additional_info;

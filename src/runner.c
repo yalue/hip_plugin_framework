@@ -454,8 +454,8 @@ static int SetCPUAffinity(PluginState *state) {
 // InitializationParameters struct. Returns 0 on error.
 static int InitializeInitializationParameters(PluginState *state,
   InitializationParameters *parameters) {
-  parameters->thread_count = state->config->thread_count;
-  parameters->block_count = state->config->block_count;
+  memcpy(parameters->block_dim, state->config->block_dim, 3 * sizeof(int));
+  memcpy(parameters->grid_dim, state->config->grid_dim, 3 * sizeof(int));
   parameters->additional_info = state->config->additional_info;
   parameters->device_id = state->shared_state->global_config->gpu_device_id;
   memcpy(parameters->compute_unit_mask, state->config->compute_unit_mask,

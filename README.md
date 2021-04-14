@@ -92,10 +92,13 @@ The layout of each configuration file is as follows:
         This can be /dev/null to throw away logs.>,
       "label:": <String. Optional. A label or name for this specific plugin, to
         be copied to its output file.>,
-      "thread_count": <Number. Required, but may be ignored. The number of HIP
-        threads that each block of this plugin should use.>,
-      "block_count": <Number. Required, but may be ignored. The number of HIP
-        blocks this plugin's kernels should use.>,
+      "thread_count": <Number or array. Required, but may be ignored. The
+        number of HIP threads that each block of this plugin should use. May
+        also be an array with up to 3 integers, specifying a multi-dimensional
+        block size.>,
+      "block_count": <Number or array. Required, but may be ignored. The number
+        of HIP blocks this plugin's kernels should use. May also be an array
+        with up to 3 integers, specifying a multi-dimensional grid size.>,
       "additional_info": <A JSON object of any format. Optional. This can be
         used to pass additional plugin-specific configuration parameters.>,
       "max_iterations": <Number. Optional. If specified, overrides the default

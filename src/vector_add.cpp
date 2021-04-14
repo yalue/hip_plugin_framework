@@ -160,7 +160,7 @@ static void* Initialize(InitializationParameters *params) {
   uint64_t vector_length;
   if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
   if (!CheckHIPError(hipSetDeviceFlags(PLUGIN_DEVICE_FLAGS))) return NULL;
-  state = (PluginState *) calloc(sizeof(*state), 1);
+  state = (PluginState *) calloc(1, sizeof(*state));
   if (!state) {
     printf("Failed allocating plugin state.\n");
     return NULL;
@@ -176,7 +176,10 @@ static void* Initialize(InitializationParameters *params) {
 
   // Compute the block count. Make sure to add an additional block if the
   // vector length isn't evenly divisible by the thread count.
-  thread_count = params->thread_count;
+  if (!GetSingleBlockDimension(params, &thread_count)) {
+    Cleanup(state);
+    return NULL;
+  }
   block_count = (int) (vector_length / ((uint64_t) thread_count));
   if ((thread_count > vector_length) &&
     ((vector_length % thread_count) != 0)) {

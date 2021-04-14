@@ -73,14 +73,16 @@ static void* Initialize(InitializationParameters *params) {
   PluginState *state = NULL;
   if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
   if (!CheckHIPError(hipSetDeviceFlags(PLUGIN_DEVICE_FLAGS))) return NULL;
-  state = (PluginState *) malloc(sizeof(*state));
+  state = (PluginState *) calloc(1, sizeof(*state));
   if (!state) {
     printf("Failed allocating plugin state.\n");
     return NULL;
   }
-  memset(state, 0, sizeof(*state));
-  state->block_count = params->block_count;
-  state->thread_count = params->thread_count;
+  if (!GetSingleBlockAndGridDimensions(params, &state->thread_count,
+    &state->block_count)) {
+    Cleanup(state);
+    return NULL;
+  }
   if (!SetLoopIterations(params->additional_info, state)) {
     Cleanup(state);
     return NULL;

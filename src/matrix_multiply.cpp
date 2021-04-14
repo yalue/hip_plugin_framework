@@ -1,12 +1,11 @@
 // This plugin multiplies two square matrices, using a not-particularly-
 // optimized matrix multiply kernel. This uses a 2D grid of 2D blocks, mapping
 // one thread per resulting matrix element. The block_count setting from the
-// config is ignored, and thread_count must be either 64, 256, or 1024, in
-// order to use 8x8, 16x16, or 32x32 blocks, respectively. The additional_info
-// must be a JSON object with the following keys:
+// config is ignored, and thread_count must be 2 dimensional. The
+// additional_info must be a JSON object with the following keys:
 //
-//  - "matrix_width": The width of the square matrix of floating-point numbers
-//    to multiply.
+// - "matrix_width": The width of the square matrix of floating-point numbers
+//   to multiply.
 //
 // - "skip_copy": A boolean. Optional, defaults to false. If it's set to true,
 //   then the "copy_in" and "copy_out" phases will not copy the matrix data to
@@ -168,7 +167,7 @@ static int ParseAdditionalInfo(const char *arg, PluginState *state) {
 
 static void* Initialize(InitializationParameters *params) {
   PluginState *state = NULL;
-  int blocks_wide, matrix_width, thread_count;
+  int blocks_wide, blocks_tall, matrix_width;
   if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
   if (!CheckHIPError(hipSetDeviceFlags(PLUGIN_DEVICE_FLAGS))) return NULL;
   state = (PluginState *) calloc(sizeof(*state), 1);
@@ -185,33 +184,24 @@ static void* Initialize(InitializationParameters *params) {
   }
   matrix_width = state->matrix_width;
 
-  // Ensure that the thread_count allows us to form a square thread block.
-  thread_count = params->thread_count;
-  switch (thread_count) {
-  case 64:
-    state->block_size.x = 8;
-    state->block_size.y = 8;
-    break;
-  case 256:
-    state->block_size.x = 16;
-    state->block_size.y = 16;
-    break;
-  case 1024:
-    state->block_size.x = 32;
-    state->block_size.y = 32;
-    break;
-  default:
-    printf("Unsupported matrix_multiply thread_count: %d\n", thread_count);
-    Cleanup(state);
-    return NULL;
+  state->block_size.x = params->block_dim[0];
+  if (params->block_dim[1] == 1) {
+    // Print a warning here; the old behavior was different so this will help
+    // catch and update configs expecting the old version. (e.g. we probably
+    // want to use 32x32 blocks rather than 1024x1 blocks!)
+    printf("Warning! Specified a 1-D block dim for matrix multiply.\n");
   }
+  state->block_size.y = params->block_dim[1];
   state->block_size.z = 1;
 
   // Compute the grid size from the block size and matrix width.
   blocks_wide = matrix_width / state->block_size.x;
   if ((matrix_width % state->block_size.x) != 0) blocks_wide++;
+  blocks_tall = matrix_width / state->block_size.y;
+  if ((matrix_width % state->block_size.y) != 0) blocks_tall++;
+
   state->grid_size.x = blocks_wide;
-  state->grid_size.y = blocks_wide;
+  state->grid_size.y = blocks_tall;
   state->grid_size.z = 1;
 
   // Create the stream and fill in boilerplate for reporting to the framework.
@@ -284,6 +274,7 @@ __global__ void MatrixMultiplyKernel(float *a, float *b, float *c, int width,
   col = blockIdx.x * blockDim.x + threadIdx.x;
   row = blockIdx.y * blockDim.y + threadIdx.y;
   if ((col >= width) || (row >= width)) {
+    // Don't try doing computations if we're outside of the matrix.
     block_times[block_index * 2 + 1] = clock64();
     return;
   }

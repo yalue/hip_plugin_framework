@@ -179,15 +179,17 @@ static void* Initialize(InitializationParameters *params) {
   if (!CheckHIPError(hipSetDeviceFlags(PLUGIN_DEVICE_FLAGS))) return NULL;
 
   // Allocate memory to hold state for this instance of the plugin.
-  state = (PluginState *) malloc(sizeof(*state));
+  state = (PluginState *) calloc(1, sizeof(*state));
   if (!state) {
     printf("Failed allocating plugin state.\n");
     return NULL;
   }
 
   // Set the default values, and those specified in the overall config.
-  memset(state, 0, sizeof(*state));
-  state->thread_count = params->thread_count;
+  if (!GetSingleBlockDimension(params, &state->thread_count)) {
+    Cleanup(state);
+    return NULL;
+  }
   dimensions = &(state->dimensions);
   dimensions->w = DEFAULT_PIXELS_WIDE;
   dimensions->h = DEFAULT_PIXELS_WIDE;
@@ -198,7 +200,7 @@ static void* Initialize(InitializationParameters *params) {
   dimensions->delta_real = 4.0 / dimensions->w;
   dimensions->delta_imag = 4.0 / dimensions->h;
   state->max_iterations = DEFAULT_MAX_ITERATIONS;
-  if ((params->thread_count <= 0) || (params->thread_count > 1024)) {
+  if ((state->thread_count <= 0) || (state->thread_count > 1024)) {
     printf("Invalid thread count.\n");
     Cleanup(state);
     return NULL;
@@ -212,8 +214,8 @@ static void* Initialize(InitializationParameters *params) {
 
   // Compute the block count, adding an additional block if the number of
   // pixels isn't evenly divisible by thread_count.
-  state->block_count = (dimensions->w * dimensions->h) / params->thread_count;
-  if (((dimensions->w * dimensions->h) % params->thread_count) != 0) {
+  state->block_count = (dimensions->w * dimensions->h) / state->thread_count;
+  if (((dimensions->w * dimensions->h) % state->thread_count) != 0) {
     state->block_count++;
   }
 
@@ -226,7 +228,7 @@ static void* Initialize(InitializationParameters *params) {
   }
   state->stream_created = 1;
   state->kernel_times.kernel_name = "mandelbrot";
-  state->kernel_times.thread_count = params->thread_count;
+  state->kernel_times.thread_count = state->thread_count;
   state->kernel_times.block_count = state->block_count;
   state->kernel_times.shared_memory = 0;
   if (!AllocateMemory(state)) {

@@ -13,7 +13,7 @@
       "label": "MM1024 (isolated)",
       "log_name": "results/cutting_ahead_timeline_isolated.json",
       "filename": "./bin/matrix_multiply.so",
-      "thread_count": 1024,
+      "thread_count": [32, 32],
       "block_count": 1,
       "additional_info": {
         "matrix_width": 1024,

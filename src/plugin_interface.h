@@ -33,13 +33,13 @@ typedef struct {
 // be set by the caller regardless.
 typedef struct {
   DeviceInformation *device_info;
-  // The number of threads to be used in each block. This parameter is intended
-  // to be used by kernels with 1-dimensional blocks that can use an adjustable
-  // number of threads.
-  int thread_count;
-  // The number of blocks to be used in the grid. This parameter, like
-  // thread_count, is intended to be used by kernels with 1-dimensional grids.
-  int block_count;
+  // The number of threads to be used in each block. This is a 3-dimensional
+  // value, with the unused dimensions being set to 1 (similarly to the dim3
+  // arguments passed to hipLaunchKernelGGL).
+  int block_dim[3];
+  // The number of blocks to create when launching a kernel. Like block_dim,
+  // unused dimensions will be set to 1.
+  int grid_dim[3];
   // Contains an optional user-specified string, which is taken from the
   // additional_info field in the plugin's JSON config. In practice, this
   // is often a JSON object with plugin-specific parameters.

@@ -18,7 +18,7 @@ def generate_configs():
         "log_name": "results/REPLACE_ME.json",
         "filename": "./bin/matrix_multiply.so",
         "initialization_delay": 0.0,
-        "thread_count": 1024,
+        "thread_count": [32, 32],
         "block_count": 1,
         "additional_info": {
             "matrix_width": 1024,

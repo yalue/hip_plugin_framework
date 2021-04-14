@@ -10,8 +10,8 @@
       "comment": "The dwt benchmark ignores thread and block count settings.",
       "filename": "./bin/dwt2d.so",
       "log_name": "results/dwt2d_test.json",
-      "thread_count": 0,
-      "block_count": 0
+      "thread_count": 1,
+      "block_count": 1
     }
   ]
 }

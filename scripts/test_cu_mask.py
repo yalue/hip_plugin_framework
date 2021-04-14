@@ -17,7 +17,7 @@ def generate_config(cu_mask, stripe_width):
         "label": str(active_cu_count),
         "log_name": "results/cu_mask_sw%d_%s.json" % (stripe_width, hex_mask),
         "filename": "./bin/matrix_multiply.so",
-        "thread_count": 1024,
+        "thread_count": [32, 32],
         "block_count": 1,
         "compute_unit_mask": cu_mask,
         "additional_info": {

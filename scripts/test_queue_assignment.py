@@ -16,17 +16,6 @@ def generate_configs():
     """ Returns a list of JSON strings, each of which contains a config that
     runs the same plugins, but initializes them in a different order to
     (hopefully) change queue mappings. """
-#    measured_base_config = {
-#        "label": "REPLACE_ME",
-#        "log_name": "results/REPLACE_ME.json",
-#        "filename": "./bin/matrix_multiply.so",
-#        "thread_count": 1024,
-#        "block_count": 1,
-#        "additional_info": {
-#            "matrix_width": 1024,
-#            "skip_copy": True
-#        }
-#    }
     measured_base_config = {
         "label": "REPLACE ME",
         "log_name": "REPLACE ME",

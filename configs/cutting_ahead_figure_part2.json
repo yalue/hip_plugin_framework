@@ -16,7 +16,7 @@
       "label": "vs. identical competitor (1024)",
       "log_name": "results/cutting_ahead_vs_1024.json",
       "filename": "./bin/matrix_multiply.so",
-      "thread_count": 1024,
+      "thread_count": [32, 32],
       "block_count": 1,
       "additional_info": {
         "matrix_width": 1024,
@@ -27,7 +27,7 @@
       "label": "competitor",
       "log_name": "/dev/null",
       "filename": "./bin/matrix_multiply.so",
-      "thread_count": 1024,
+      "thread_count": [32, 32],
       "block_count": 1,
       "additional_info": {
         "matrix_width": 1024,
