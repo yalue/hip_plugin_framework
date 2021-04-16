@@ -12,7 +12,8 @@ all: directories plugins bin/runner bin/hip_host_utilities.so bin/list_devices \
 
 plugins: directories bin/mandelbrot.so bin/counter_spin.so bin/timer_spin.so \
 	bin/random_walk.so bin/huge_kernels.so bin/memory_copy.so \
-	bin/vector_add.so bin/dummy_streams.so bin/matrix_multiply.so
+	bin/vector_add.so bin/dummy_streams.so bin/matrix_multiply.so \
+	bin/dummy_lock_gpu.so
 
 rodinia_plugins: directories obj/cJSON.o obj/plugin_utilities.o \
 	obj/plugin_hip_utilities.o
@@ -58,6 +59,14 @@ bin/counter_spin.so: obj/counter_spin.o $(PLUGIN_DEPENDENCIES)
 
 obj/timer_spin.o: src/timer_spin.cpp $(PLUGIN_DEPENDENCIES)
 	hipcc -c $(CFLAGS) -o obj/timer_spin.o src/timer_spin.cpp
+
+obj/dummy_lock_gpu.o: src/dummy_lock_gpu.cpp src/gpu_locking_module.h \
+	$(PLUGIN_DEPENDENCIES)
+	hipcc -c $(CFLAGS) -o obj/dummy_lock_gpu.o src/dummy_lock_gpu.cpp
+
+bin/dummy_lock_gpu.so: obj/dummy_lock_gpu.o $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/dummy_lock_gpu.so obj/dummy_lock_gpu.o \
+		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
 bin/timer_spin.so: obj/timer_spin.o $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/timer_spin.so obj/timer_spin.o \

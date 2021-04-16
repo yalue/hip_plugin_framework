@@ -1,0 +1,37 @@
+{
+  "name": "Dummy-GPU-locking test",
+  "comment": "Basic example of using the dummy_lock_gpu plugin to preempt GPU work.",
+  "max_iterations": 100,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "comment": "Using processes is *essential* for sane behavior of the dummy_lock_gpu plugin. This is kind of beside the point, because it's also necessary when using the job_deadline option...",
+  "use_processes": true,
+  "omit_block_times": true,
+  "do_warmup": true,
+  "comment": "Measuring preemption overheads makes a lot more sense when trying to preempt stuff while it's running; setting sync_every_iteration should help with that.",
+  "sync_every_iteration": true,
+  "plugins": [
+    {
+      "filename": "./bin/dummy_lock_gpu.so",
+      "log_name": "results/dummy_lock_gpu.json",
+      "comment": "Thread and block counts are ignored by this plugin.",
+      "thread_count": 1,
+      "block_count": 1,
+      "comment": "Lock and release the GPU once per iteration (this is default behavior)",
+      "additional_info": {
+        "preempt_count": 1
+      }
+    },
+    {
+      "filename": "./bin/matrix_multiply.so",
+      "log_name": "results/matrix_multiply_preempted.json",
+      "job_deadline": 0.060,
+      "thread_count": [32, 32],
+      "block_count": 1,
+      "additional_info": {
+        "matrix_width": 1024,
+        "skip_copy": true
+      }
+    }
+  ]
+}
