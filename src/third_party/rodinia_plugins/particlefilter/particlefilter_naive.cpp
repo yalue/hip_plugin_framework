@@ -128,23 +128,20 @@ static int AllocateMemory(PluginState *s) {
   int x, y, i;
   uint64_t *tmp = NULL;
   size_t size = s->IszX * s->IszY * s->Nfr * sizeof(int);
-  s->I = (int *) malloc(size);
+  s->I = (int *) calloc(1, size);
   if (!s->I) {
     printf("Failed allocating matrix.\n");
   }
-  memset(s->I, 0, size);
-  s->tmp_dilate = (int *) malloc(size);
+  s->tmp_dilate = (int *) calloc(1, size);
   if (!s->tmp_dilate) {
     printf("Failed allocating tmp dilate matrix.\n");
     return 0;
   }
-  memset(s->tmp_dilate, 0, size);
-  s->disk = (int *) malloc(DISK_DIAMETER * DISK_DIAMETER * sizeof(int));
+  s->disk = (int *) calloc(DISK_DIAMETER * DISK_DIAMETER, sizeof(int));
   if (!s->disk) {
     printf("Failed allocating disk buffer.\n");
     return 0;
   }
-  memset(s->disk, 0, DISK_DIAMETER * DISK_DIAMETER * sizeof(int));
   // This only needs to be done once in the original code, so we'll do it here
   // rather than in Execute.
   strelDisk(s->disk, DISK_RADIUS);
@@ -153,24 +150,21 @@ static int AllocateMemory(PluginState *s) {
       if (s->disk[x * DISK_DIAMETER + y] == 1) s->countOnes++;
     }
   }
-  s->objxy = (double *) malloc(s->countOnes * 2 * sizeof(double));
+  s->objxy = (double *) calloc(s->countOnes * 2, sizeof(double));
   if (!s->objxy) {
     printf("Failed allocating the objxy array.\n");
     return 0;
   }
-  memset(s->objxy, 0, s->countOnes * 2 * sizeof(double));
-  s->ind = (int *) malloc(s->countOnes * sizeof(int));
+  s->ind = (int *) calloc(s->countOnes, sizeof(int));
   if (!s->ind) {
     printf("Failed allocating ind array.\n");
     return 0;
   }
-  memset(s->ind, 0, s->countOnes * sizeof(int));
-  s->kernel_times = (KernelTimes *) malloc((s->Nfr - 1) * sizeof(KernelTimes));
+  s->kernel_times = (KernelTimes *) calloc((s->Nfr - 1), sizeof(KernelTimes));
   if (!s->kernel_times) {
     printf("Failed allocating kernel times buffer.\n");
     return 0;
   }
-  memset(s->kernel_times, 0, (s->Nfr - 1) * sizeof(KernelTimes));
   for (i = 0; i < (s->Nfr - 1); i++) {
     // Allocate enough space for start and end times of every block.
     tmp = NULL;
@@ -186,18 +180,16 @@ static int AllocateMemory(PluginState *s) {
   }
 
   size = s->Nparticles * sizeof(double);
-  s->weights = (double *) malloc(size);
+  s->weights = (double *) calloc(1, size);
   if (!s->weights) {
     printf("Failed allocating the weights array.\n");
     return 0;
   }
-  memset(s->weights, 0, size);
-  s->likelihood = (double *) malloc(size);
+  s->likelihood = (double *) calloc(1, size);
   if (!s->likelihood) {
     printf("Failed allocating the likelihood array.\n");
     return 0;
   }
-  memset(s->likelihood, 0, size);
   if (!CheckHIPError(hipHostMalloc(&s->arrayX, size))) return 0;
   if (!CheckHIPError(hipHostMalloc(&s->arrayY, size))) return 0;
   if (!CheckHIPError(hipHostMalloc(&s->xj, size))) return 0;

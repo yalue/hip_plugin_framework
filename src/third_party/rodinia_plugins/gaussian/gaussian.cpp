@@ -171,12 +171,11 @@ static void* Initialize(InitializationParameters *params) {
   if (!CheckHIPError(hipSetDevice(params->device_id))) {
     return NULL;
   }
-  s = (PluginState *) malloc(sizeof(*s));
+  s = (PluginState *) calloc(1, sizeof(*s));
   if (!s) {
     printf("Failed allocating plugin state.\n");
     return NULL;
   }
-  memset(s, 0, sizeof(*s));
 
   // The following stuff needs to be set before calling AllocateMemory.
   s->Size = MATRIX_SIZE;

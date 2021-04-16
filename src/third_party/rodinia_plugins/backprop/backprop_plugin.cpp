@@ -136,12 +136,11 @@ static void* Initialize(InitializationParameters *params) {
   PluginState *s = NULL;
   int random_seed;
   if (!CheckHIPError(hipSetDevice(params->device_id))) return NULL;
-  s = (PluginState *) malloc(sizeof(*s));
+  s = (PluginState *) calloc(1, sizeof(*s));
   if (!s) {
     printf("Failed allocating plugin state.\n");
     return NULL;
   }
-  memset(s, 0, sizeof(*s));
   s->layer_size = LAYER_SIZE;
   if ((s->layer_size % 16) != 0) {
     printf("Layer size must be a multiple of 16.\n");

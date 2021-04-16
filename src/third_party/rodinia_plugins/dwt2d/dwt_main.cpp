@@ -165,26 +165,23 @@ static int AllocateMemory(PluginState *s) {
   // We launch DWT_LEVELS kernels for each color channel, plus a single kernel
   // for separating the colors into channels.
   tmp = (DWT_LEVELS * COLOR_CHANNELS) + 1;
-  s->kernel_times = (KernelTimes *) malloc(tmp * sizeof(KernelTimes));
+  s->kernel_times = (KernelTimes *) calloc(tmp, sizeof(KernelTimes));
   if (!s->kernel_times) {
     printf("Failed allocating kernel times list.\n");
     return 0;
   }
-  memset(s->kernel_times, 0, tmp * sizeof(KernelTimes));
   // We also need to allocate pointers to block times for each of these
   // kernels.
-  s->host_block_times = (uint64_t **) malloc(tmp * sizeof(uint64_t *));
+  s->host_block_times = (uint64_t **) calloc(tmp, sizeof(uint64_t *));
   if (!s->host_block_times) {
     printf("Failed allocating host block time pointers.\n");
     return 0;
   }
-  memset(s->host_block_times, 0, tmp * sizeof(uint64_t *));
-  s->device_block_times = (uint64_t **) malloc(tmp * sizeof(uint64_t *));
+  s->device_block_times = (uint64_t **) calloc(tmp, sizeof(uint64_t *));
   if (!s->device_block_times) {
     printf("Failed allocating device block time pointers.\n");
     return 0;
   }
-  memset(s->device_block_times, 0, tmp * sizeof(uint64_t *));
   // We'll go ahead and figure out the block and thread counts for each kernel
   // here, since we'll need to do so to allocate the block_times buffers
   // anyway. The first kernel is color-component separation.
@@ -247,13 +244,12 @@ static void* Initialize(InitializationParameters *params) {
   if (!CheckHIPError(hipSetDevice(params->device_id))) {
     return NULL;
   }
-  s = (PluginState *) malloc(sizeof(*s));
+  s = (PluginState *) calloc(1, sizeof(*s));
   if (!s) {
     printf("Failed allocating plugin state.\n");
     return NULL;
   }
-  memset(s, 0, sizeof(*s));
-  s->d = (struct dwt *) malloc(sizeof(struct dwt));
+  s->d = (struct dwt *) calloc(1, sizeof(struct dwt));
   if (!s->d) {
     Cleanup(s);
     return NULL;
