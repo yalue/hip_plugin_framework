@@ -9,17 +9,22 @@
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <sched.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include "gpu_locking_module.h"
 #include "multiprocess_sync.h"
 #include "parse_config.h"
 #include "plugin_interface.h"
@@ -792,6 +797,50 @@ static int DoWarmup(PluginState *state, void *user_data) {
   return 1;
 }
 
+// Sets the given FD to a handle to the GPU locking module's chardev, if it's
+// present. Returns 1 on success. Returns 1 (success) if the module is not
+// needed, regardless of whether it's present. (In this case, *fd will be set
+// to -1.). Otherwise, returns 0 on error.
+static int OpenGPULockingModuleIfNeeded(PluginState *state, int *fd) {
+  *fd = -1;
+
+  // The FD simply isn't needed if we're not going to set deadlines.
+  if (state->config->relative_deadline <= 0) return 1;
+
+  // It's invalid to try to interact with the locking module when using
+  // threads, since deadlines, etc, would be set for all threads at once. I
+  // can't think of a good use case for this and would rather make it an error
+  // so I don't accidentally forget.
+  if (!state->shared_state->global_config->use_processes) {
+    printf("Error: can't use threads when setting deadlines.\n");
+    return 0;
+  }
+
+  *fd = open("/dev/gpu_locking_module", O_RDWR);
+  if (*fd < 0) {
+    *fd = -1;
+    printf("/dev/gpu_locking_module is required, but couldn't be opened: %s\n",
+      strerror(errno));
+    return 0;
+  }
+  return 1;
+}
+
+// Takes an FD to the GPU locking chardev and a relative deadline, in seconds.
+// Issues the ioctl to update the task's relative deadline. Returns 0 on error.
+static int SetDeadlineIoctl(int fd, double relative_deadline) {
+  SetDeadlineArgs args;
+  int result;
+  // Convert the seconds to nanoseconds.
+  args.deadline = (uint64_t) (relative_deadline * 1e9);
+  result = ioctl(fd, GPU_LOCK_SET_DEADLINE_IOC, &args);
+  if (result != 0) {
+    printf("Ioctl to set deadline returned an error: %s\n", strerror(errno));
+    return 0;
+  }
+  return 1;
+}
+
 // Runs a single plugin instance. This is usually called from a separate thread
 // or process. Its argument must be a pointer to a PluginState struct. It may
 // print a message and return NULL on error. On success, it will return an
@@ -802,13 +851,15 @@ static void* RunPlugin(void *data) {
   CPUTimes cpu_times;
   uint64_t i;
   int64_t max_iterations;
-  double start_time, time_limit;
+  double start_time, time_limit, relative_deadline;
   PluginState *state = (PluginState *) data;
   ProcessBarrier *barrier = &(state->shared_state->barrier);
   int barrier_local_sense = 0;
   TimingInformation timing_info;
   void *user_data = NULL;
   const char *name;
+  int locking_module_fd = -1;
+  relative_deadline = state->config->relative_deadline;
 
   if (!LoadPluginLibrary(state)) {
     printf("Failed loading a plugin's shared library file.\n");
@@ -826,6 +877,7 @@ static void* RunPlugin(void *data) {
     return NULL;
   }
   start_time = CurrentSeconds();
+  // Does nothing if initialization_delay is 0 or lower.
   if (!SleepSeconds(state->config->initialization_delay)) {
     printf("Failed sleeping prior to initializing %s.\n", name);
     return NULL;
@@ -835,30 +887,37 @@ static void* RunPlugin(void *data) {
     printf("Failed initializing instance of %s.\n", name);
     return NULL;
   }
+  // We'll open the locking module here if we'll need it to set deadlines. We
+  // intentionally do this after initialize(..) to ensure that ROCm will have
+  // been loaded if it's used by this plugin.
+  if (!OpenGPULockingModuleIfNeeded(state, &locking_module_fd)) {
+    printf("Failed opening GPU locking module.\n");
+    goto ErrorCleanup;
+  }
   if (!WriteOutputHeader(state)) {
     printf("Failed writing the output file header for %s.\n", name);
-    return NULL;
+    goto ErrorCleanup;
   }
   // Do the warmup iteration(s) if required.
   if (state->shared_state->global_config->do_warmup) {
     if (!DoWarmup(state, user_data)) {
-      state->functions.cleanup(user_data);
-      return NULL;
+      goto ErrorCleanup;
     }
   }
 
+  // We're done initializing, so barrier-wait for other plugins to finish
+  // initializing before running our normal iterations.
   printf("Plugin %d: %s initialized in %f seconds.\n", state->plugin_index,
     name, CurrentSeconds() - start_time);
   fflush(stdout);
   if (!BarrierWait(barrier, &barrier_local_sense)) {
     printf("Failed waiting for post-initialization synchronization.\n");
-    state->functions.cleanup(user_data);
-    return NULL;
+    goto ErrorCleanup;
   }
-  // This function does nothing if the release time is 0 or lower.
+
+  // Does nothing if release_time is 0 or lower.
   if (!SleepSeconds(state->config->release_time)) {
-    state->functions.cleanup(user_data);
-    return NULL;
+    goto ErrorCleanup;
   }
   i = 0;
   start_time = CurrentSeconds();
@@ -875,58 +934,69 @@ static void* RunPlugin(void *data) {
     if (state->shared_state->global_config->sync_every_iteration) {
       if (!BarrierWait(barrier, &barrier_local_sense)) {
         printf("Failed waiting to sync before an iteration.\n");
-        state->functions.cleanup(user_data);
-        return NULL;
+        goto ErrorCleanup;
       }
     }
+    if (relative_deadline > 0) {
+      // OpenGPULockingModuleIfNeeded already ensures the chardev is present if
+      // relative_deadline is positive.
+      if (!SetDeadlineIoctl(locking_module_fd, relative_deadline)) {
+        printf("Failed setting iteration's relative deadline.\n");
+        goto ErrorCleanup;
+      }
+    }
+
     // A single plugin iteration consists of copy_in, execute, and copy_out.
     cpu_times.copy_in_start = GlobalSecondsElapsed(state);
     if (!state->functions.copy_in(user_data)) {
       printf("Plugin %s copy in failed.\n", name);
-      state->functions.cleanup(user_data);
-      return NULL;
+      goto ErrorCleanup;
     }
     cpu_times.copy_in_end = GlobalSecondsElapsed(state);
     cpu_times.execute_start = GlobalSecondsElapsed(state);
     if (!state->functions.execute(user_data)) {
       printf("Plugin %s execute failed.\n", name);
-      state->functions.cleanup(user_data);
-      return NULL;
+      goto ErrorCleanup;
     }
     cpu_times.execute_end = GlobalSecondsElapsed(state);
     cpu_times.copy_out_start = GlobalSecondsElapsed(state);
     if (!state->functions.copy_out(user_data, &timing_info)) {
       printf("Plugin %s copy out failed.\n", name);
-      state->functions.cleanup(user_data);
-      return NULL;
+      goto ErrorCleanup;
     }
     cpu_times.copy_out_end = GlobalSecondsElapsed(state);
-    // Finally, write the timing data we obtained for this iteration to the
-    // output file.
+
+    // Write the timing data we obtained for this iteration to the output file.
     if (!WriteCPUTimesToOutput(state, &cpu_times)) {
       printf("Failed writing CPU times for plugin %s to output file.\n", name);
-      state->functions.cleanup(user_data);
-      return NULL;
+      goto ErrorCleanup;
     }
     if (!WriteTimesToOutput(state, &timing_info)) {
       printf("Failed writing times for plugin %s to output file.\n", name);
-      state->functions.cleanup(user_data);
-      return NULL;
+      goto ErrorCleanup;
     }
   }
   // Wait before cleaning up any successful plugins in case cleaning up blocks
   // the GPU (in other cases, cleaning up occurred due to an error).
   if (!BarrierWait(barrier, &barrier_local_sense)) {
     printf("Failed waiting to sync before cleanup.\n");
-    state->functions.cleanup(user_data);
-    return NULL;
+    goto ErrorCleanup;
   }
+
   state->functions.cleanup(user_data);
+  user_data = NULL;
+  close(locking_module_fd);
+  locking_module_fd = -1;
   if (fprintf(state->output_file, "\n]}") < 0) {
     printf("Failed writing footer to output file.\n");
     return NULL;
   }
   return (void *) 1;
+
+ErrorCleanup:
+  state->functions.cleanup(user_data);
+  if (locking_module_fd >= 0) close(locking_module_fd);
+  return NULL;
 }
 
 // Runs plugin instances in separate processes. Returns 1 on success and 0 if

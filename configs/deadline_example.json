@@ -1,0 +1,37 @@
+{
+  "name": "Relative-deadline test",
+  "comment": "This isn't supposed to be a very interesting experiment; just a sanity check that a earlier relative deadline has priority over a later one.",
+  "max_iterations": 100,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "use_processes": true,
+  "omit_block_times": true,
+  "do_warmup": true,
+  "sync_every_iteration": true,
+  "plugins": [
+    {
+      "filename": "./bin/matrix_multiply.so",
+      "log_name": "results/mm_hi_priority.json",
+      "label": "20ms deadline",
+      "job_deadline": 0.020,
+      "thread_count": [32, 32],
+      "block_count": 1,
+      "additional_info": {
+        "matrix_width": 1024,
+        "skip_copy": true
+      }
+    },
+    {
+      "filename": "./bin/matrix_multiply.so",
+      "log_name": "results/mm_lo_priority.json",
+      "label": "60ms deadline",
+      "job_deadline": 0.060,
+      "thread_count": [32, 32],
+      "block_count": 1,
+      "additional_info": {
+        "matrix_width": 1024,
+        "skip_copy": true
+      }
+    }
+  ]
+}

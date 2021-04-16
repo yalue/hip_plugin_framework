@@ -12,11 +12,23 @@ terminology and to remove any NVIDIA-specific code.  (Which, unfortunately
 means that this project is unable to plot which compute units blocks are
 assigned to.)
 
+
+Prerequisites
+-------------
+
 Some of this project may require modified versions of AMD's HIP framework or
 other ROCm components (as it is intended to support my research). If any such
 modifications are needed, they should be included in
 [this repository](https://github.com/yalue/rocm_mega_repo). As of ROCm 3.7,
-however, this repository should not require any non-standard HIP functionality.
+however, this repository should not require any non-standard HIP functionality
+for most basic usage.
+
+Components related to setting GPU deadlines will not work unless the Linux
+kernel module and patches located in
+[this repository](https://github.com/yalue/gpu_locking_module), are present and
+loaded.  However, this is not required if you aren't using locking; the
+framework will run without it as long as configs don't include the
+`job_deadline` setting.
 
 
 Basic Compilation and Usage
@@ -113,6 +125,13 @@ The layout of each configuration file is as follows:
         sleep for the given number of seconds before calling the plugin's
         initialization function. Intended to be used as a crude mechanism for
         enforcing initialization order.>,
+      "job_deadline": <Number. Optional. If set, must be a floating-point
+        number of seconds specifying a relative deadline within which each
+        of the plugin's iterations must complete. (In other words, the relative
+        deadline is updated at the start of every iteration.)  It is an error
+        to set this if the GPU locking modules isn't available (see the
+        Prerequisites section of this README). If not present, no deadlines
+        will be set. Must be positive if set.>,
       "cpu_core": <Number. Optional. If specified, and pin_cpus is false, the
         system will attempt to pin this plugin onto the given CPU core.>
       "compute_unit_mask": <Optional. Can be an array of booleans, or a string

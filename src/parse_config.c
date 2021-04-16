@@ -49,18 +49,18 @@ static int VerifyConfigKeys(cJSON *config, char **valid_keys,
 static int VerifyGlobalConfigKeys(cJSON *main_config) {
   int keys_count = 0;
   char *valid_keys[] = {
-    "name",
+    "base_result_directory",
+    "comment",
+    "do_warmup",
+    "gpu_device_id",
     "max_iterations",
     "max_time",
-    "use_processes",
-    "gpu_device_id",
-    "base_result_directory",
+    "name",
+    "omit_block_times",
     "pin_cpus",
     "plugins",
     "sync_every_iteration",
-    "do_warmup",
-    "omit_block_times",
-    "comment",
+    "use_processes",
   };
   keys_count = sizeof(valid_keys) / sizeof(char*);
   return VerifyConfigKeys(main_config, valid_keys, keys_count);
@@ -71,19 +71,20 @@ static int VerifyGlobalConfigKeys(cJSON *main_config) {
 static int VerifyPluginConfigKeys(cJSON *plugin_config) {
   int keys_count = 0;
   char *valid_keys[] = {
-    "filename",
-    "log_name",
-    "label",
-    "thread_count",
-    "block_count",
     "additional_info",
+    "block_count",
+    "comment",
+    "compute_unit_mask",
+    "cpu_core",
+    "filename",
+    "initialization_delay",
+    "job_deadline",
+    "label",
+    "log_name",
     "max_iterations",
     "max_time",
     "release_time",
-    "initialization_delay",
-    "cpu_core",
-    "compute_unit_mask",
-    "comment",
+    "thread_count",
   };
   keys_count = sizeof(valid_keys) / sizeof(char*);
   return VerifyConfigKeys(plugin_config, valid_keys, keys_count);
@@ -404,6 +405,20 @@ static int ParsePluginList(GlobalConfiguration *config, cJSON *list_start) {
       plugins[i].release_time = entry->valuedouble;
     } else {
       plugins[i].release_time = 0;
+    }
+    entry = cJSON_GetObjectItem(current_plugin, "job_deadline");
+    if (entry) {
+      if (entry->type != cJSON_Number) {
+        printf("Invalid job_deadline in config.\n");
+        goto ErrorCleanup;
+      }
+      if (entry->valuedouble <= 0.0) {
+        printf("The job_deadline setting must be positive if present.\n");
+        goto ErrorCleanup;
+      }
+      plugins[i].relative_deadline = entry->valuedouble;
+    } else {
+      plugins[i].relative_deadline = -1.0;
     }
     entry = cJSON_GetObjectItem(current_plugin, "initialization_delay");
     if (entry) {

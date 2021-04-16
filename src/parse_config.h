@@ -44,6 +44,8 @@ typedef struct {
   // The number of seconds for which the plugin should sleep before starting.
   // If 0 or negative, it won't sleep at all.
   double release_time;
+  // Each iteration's deadline, as a number of seconds. Negative if unused.
+  double relative_deadline;
   // The CPU core to pin this plugin to. Ignored if negative.
   int cpu_core;
 } PluginConfiguration;

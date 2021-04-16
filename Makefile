@@ -25,7 +25,7 @@ directories:
 obj/cJSON.o: src/third_party/cJSON.c src/third_party/cJSON.h
 	gcc -c $(CFLAGS) -o obj/cJSON.o src/third_party/cJSON.c
 
-obj/runner.o: src/runner.c src/plugin_interface.h
+obj/runner.o: src/runner.c src/plugin_interface.h src/gpu_locking_module.h
 	gcc -c $(CFLAGS) -o obj/runner.o src/runner.c
 
 obj/parse_config.o: src/parse_config.c src/parse_config.h
