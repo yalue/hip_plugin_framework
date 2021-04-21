@@ -59,13 +59,6 @@ typedef struct {
 // preempted or acquire the lock.
 #define GPU_LOCK_SET_DEADLINE_IOC _IOW('h', 0xac, SetDeadlineArgs)
 
-// Send this ioctl to disable subsequent lock-acquire and release requests,
-// replacing lock-acquire and lock-release requests with no-ops that silently
-// succeed. It is an error to call this with any outstanding lock-acquire
-// requests. Intended to help disable locking API without further modifications
-// to the userspace HIP or ROCm code.
-#define GPU_LOCK_DISABLE_LOCKING_IOC _IO('h', 0xae)
-
 // This ioctl will return only after the number of processes specified in the
 // "count" field of the arg have invoked it.
 #define GPU_LOCK_BARRIER_SYNC_IOC _IOW('h', 0xb0, BarrierSyncArgs)

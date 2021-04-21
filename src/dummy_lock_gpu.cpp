@@ -199,8 +199,8 @@ static int CopyIn(void *data) {
 static void ShortSleep(void) {
   struct timespec ts;
   memset(&ts, 0, sizeof(ts));
-  // We'll sleep for approximately one microsecond.
-  ts.tv_nsec = 1000;
+  // We'll sleep for approximately 100 microseconds.
+  ts.tv_nsec = 100 * 1000;
   nanosleep(&ts, NULL);
 }
 
