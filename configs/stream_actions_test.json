@@ -1,0 +1,51 @@
+{
+  "name": "Stream actions test",
+  "comment": "Just a basic config to make sure stream_actions.so doesn't crash.",
+  "max_iterations": 1,
+  "gpu_device_id": 0,
+  "max_time": 0,
+  "plugins": [
+    {
+      "filename": "./bin/stream_actions.so",
+      "label": "Stream Actions",
+      "log_name": "results/stream_actions_test.json",
+      "comment": "stream_actions ignores the global thread & block count",
+      "thread_count": 1,
+      "block_count": 1,
+      "additional_info": [
+        {
+          "action": "copy_in",
+          "size": 1024
+        },
+        {
+          "action": "kernel",
+          "matrix_width": 1024,
+          "block_dims": [32, 16]
+        },
+        {
+          "action": "copy_out",
+          "comment": "The copies (and sizes) have no impact on kernels.",
+          "comment": "Copies are just to generate memory-transfer pressure.",
+          "size": 100000
+        },
+        {
+          "action": "copy_in",
+          "size": 4096
+        },
+        {
+          "action": "kernel",
+          "matrix_width": 512,
+          "block_dims": [16, 16]
+        },
+        {
+          "action": "copy_out",
+          "size": 4
+        },
+        {
+          "action": "synchronize"
+        }
+      ]
+    }
+  ]
+}
+

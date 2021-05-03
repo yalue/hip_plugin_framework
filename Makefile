@@ -13,7 +13,7 @@ all: directories plugins bin/runner bin/hip_host_utilities.so bin/list_devices \
 plugins: directories bin/mandelbrot.so bin/counter_spin.so bin/timer_spin.so \
 	bin/random_walk.so bin/huge_kernels.so bin/memory_copy.so \
 	bin/vector_add.so bin/dummy_streams.so bin/matrix_multiply.so \
-	bin/dummy_lock_gpu.so
+	bin/dummy_lock_gpu.so bin/stream_actions.so
 
 rodinia_plugins: directories obj/cJSON.o obj/plugin_utilities.o \
 	obj/plugin_hip_utilities.o
@@ -112,6 +112,13 @@ obj/dummy_streams.o: src/dummy_streams.cpp $(PLUGIN_DEPENDENCIES)
 
 bin/dummy_streams.so: obj/dummy_streams.o $(PLUGIN_DEPENDENCIES)
 	hipcc --shared $(CFLAGS) -o bin/dummy_streams.so obj/dummy_streams.o \
+		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
+
+obj/stream_actions.o: src/stream_actions.cpp $(PLUGIN_DEPENDENCIES)
+	hipcc -c $(CFLAGS) -o obj/stream_actions.o src/stream_actions.cpp
+
+bin/stream_actions.so: obj/stream_actions.o $(PLUGIN_DEPENDENCIES)
+	hipcc --shared $(CFLAGS) -o bin/stream_actions.so obj/stream_actions.o \
 		obj/plugin_utilities.o obj/plugin_hip_utilities.o obj/cJSON.o
 
 bin/hip_host_utilities.so: src/hip_host_utilities.cpp src/plugin_interface.h
