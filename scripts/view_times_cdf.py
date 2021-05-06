@@ -176,12 +176,12 @@ def plot_scenario(plugins, name, times_key):
     axes.autoscale(enable=True, axis='both', tight=True)
     for i in range(len(cdfs)):
         axes.plot(cdfs[i][0], cdfs[i][1], label=labels[i], lw=1.5,
-            **(style_cycler.next()))
+            **next(style_cycler))
     add_plot_padding(axes)
     axes.set_xlabel("Time (milliseconds)")
     axes.set_ylabel("% <= X")
     legend = plot.legend()
-    legend.draggable()
+    legend.set_draggable(True)
     return figure
 
 def show_plots(filenames, times_key):
