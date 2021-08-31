@@ -46,7 +46,7 @@ def generate_config(se_packed, use_competitor):
         "compute_unit_mask": measured_cu_mask,
         "additional_info": {
             "matrix_width": 1024,
-            "skip_copy": False
+            "skip_copy": True
         }
     }
     competitor_config = {
@@ -69,8 +69,8 @@ def generate_config(se_packed, use_competitor):
         "max_time": 60,
         "gpu_device_id": 0,
         "pin_cpus": True,
-        "sync_every_iteration": True,
         "use_processes": True,
+        "do_warmup": True,
         "plugins": plugin_list
     }
     return bytes(json.dumps(overall_config), 'utf-8')

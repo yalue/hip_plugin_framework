@@ -49,7 +49,7 @@ def get_plugin_raw_values(plugin, times_key):
         if not times_key in t:
             continue
         times = t[times_key]
-        for i in range(len(times) / 2):
+        for i in range(len(times) // 2):
             start_index = i * 2
             end_index = i * 2 + 1
             milliseconds = (times[end_index] - times[start_index]) * 1000.0
@@ -157,19 +157,19 @@ def plot_scenario(plugins, name, times_key):
         raw_data = get_plugin_raw_values(p, times_key)
         raw_data_array.append(raw_data)
     figure = plot.figure()
-    figure.suptitle(name)
+    figure.suptitle(name + ": " + times_key)
     axes = figure.add_subplot(1, 1, 1)
     # Make the axes track data exactly, we'll manually add padding later.
     axes.autoscale(enable=True, axis='both', tight=True)
     for i in range(len(raw_data_array)):
         density = stats.kde.gaussian_kde(raw_data_array[i])
         x = get_x_range(raw_data_array[i])
-        axes.plot(x, density(x), label=labels[i], **(style_cycler.next()))
+        axes.plot(x, density(x), label=labels[i], **(next(style_cycler)))
     add_plot_padding(axes)
     axes.set_xlabel("Time (milliseconds)")
     axes.set_ylabel("Density")
     legend = plot.legend()
-    legend.draggable()
+    legend.set_draggable(True)
     return figure
 
 def show_plots(filenames, times_key):
@@ -189,7 +189,7 @@ def show_plots(filenames, times_key):
         scenarios[scenario].append(plugin_result)
     figures = []
     for scenario in scenarios:
-        print scenario
+        print(scenario)
         figures.append(plot_scenario(scenarios[scenario], scenario, times_key))
     plot.show()
 

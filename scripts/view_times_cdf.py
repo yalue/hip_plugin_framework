@@ -170,7 +170,7 @@ def plot_scenario(plugins, name, times_key):
         cdf_data = get_plugin_cdf(b, times_key)
         cdfs.append(cdf_data)
     figure = plot.figure()
-    figure.suptitle(name)
+    figure.suptitle(name + ": " + times_key)
     axes = figure.add_subplot(1, 1, 1)
     # Make the axes track data exactly, we'll manually add padding later.
     axes.autoscale(enable=True, axis='both', tight=True)

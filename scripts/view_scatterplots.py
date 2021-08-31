@@ -89,7 +89,7 @@ def plot_scenario(scenario, name):
     axes.set_ylabel("Duration (ms)")
     axes.set_xlabel("Value")
     legend = plot.legend()
-    legend.draggable()
+    legend.set_draggable(True)
     return figure
 
 def show_plots(filenames, times_key):

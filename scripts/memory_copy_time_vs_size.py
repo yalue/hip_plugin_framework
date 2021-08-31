@@ -59,7 +59,7 @@ def generate_config(buffer_size, competitor_count):
         "use_processes": False,
         "plugins": plugins
     }
-    return json.dumps(overall_config)
+    return bytes(json.dumps(overall_config), encoding="utf-8")
 
 def run_process(buffer_size, competitor_count):
     """ Starts the process that will run the plugin with the given buffer
@@ -82,8 +82,12 @@ if __name__ == "__main__":
         print("The number of competitors must be positive.")
         exit(1)
 
+    if args.dynamic_subdivisions:
+        print("Warning! --dynamic_subdivisions is not implemented in this " +
+            "script; it does nothing.")
+
     for i in range(32):
         # Test buffer sizes from 64 MB to 2 GB, in steps of 64 MB.
         buffer_size = 64 * (1024 * 1024) * (i + 1)
-        run_process(buffer_size, args.competitors, args.dynamic_subdivisions)
+        run_process(buffer_size, args.competitors)
 

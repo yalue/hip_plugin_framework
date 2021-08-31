@@ -1,0 +1,21 @@
+{
+  "comment": "This was intended to be a slightly more intensive version of simple.json",
+  "name": "1000 Mandelbrot-set kernels",
+  "max_iterations": 1000,
+  "max_time": 0,
+  "gpu_device_id": 0,
+  "use_processes": true,
+  "plugins": [
+    {
+      "filename": "./bin/mandelbrot.so",
+      "log_name": "results/mandelbrot_1k.json",
+      "thread_count": 512,
+      "block_count": 1,
+      "additional_info": {
+        "max_iterations": 1000,
+        "image_width": 1000
+      }
+    }
+  ]
+}
+
