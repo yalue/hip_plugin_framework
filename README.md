@@ -12,6 +12,17 @@ terminology and to remove any NVIDIA-specific code.  (Which, unfortunately
 means that this project is unable to plot which compute units blocks are
 assigned to.)
 
+To cite this work, either link the repository or cite
+[the following paper](https://www.cs.unc.edu/~otternes/papers/rtns2021.pdf):
+
+```
+@inproceedings{otterness2021amd,
+  title={Exploring {AMD} {GPU} Scheduling Details by Experimenting With ``Worst Practices''},
+  author={Otterness, Nathan and Anderson, James H.},
+  booktitle={International Conference on Real-Time Networks and Systems (RTNS)},
+  year={2021}
+}
+```
 
 Prerequisites
 -------------
